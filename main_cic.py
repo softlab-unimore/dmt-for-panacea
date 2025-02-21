@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
 # df = pd.read_csv('CICDATASET/Train_data.csv', delimiter=',')
-df = pd.read_csv('CICDATASET/02-14-2018.csv', delimiter=',')
+df = pd.read_csv('datasets/cicids.csv', delimiter=',')
 # ordinal_categories = ['protocol_type', 'service', 'flag']
 ordinal_categories = [col for col in df.columns if df[col].dtype == 'object']
 print('Ordinal Categories: ', ordinal_categories)
