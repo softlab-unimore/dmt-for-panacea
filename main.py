@@ -3,13 +3,13 @@ import numpy as np
 import warnings
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
-from DecisionTree import DecisionTree
+from decision_tree import DecisionTree
 from sklearn.decomposition import PCA
 from copy import deepcopy
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
-# Esempio di utilizzo
+
 if __name__ == "__main__":
     # Generazione di dati di esempio
 
