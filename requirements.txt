@@ -1,6 +1,5 @@
 numpy
 pandas
-scikit-learn
-OApackage
+scikit_learn
 matplotlib
-seaborn
+oapackage
