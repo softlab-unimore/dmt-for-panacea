@@ -1,7 +1,7 @@
+import os
 from argparse import ArgumentParser
 
 import pandas as pd
-from numpy.ma.core import remainder
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -11,8 +11,7 @@ import warnings
 from sklearn.exceptions import ConvergenceWarning
 from pandas.errors import SettingWithCopyWarning
 from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer
-from sklearn.metrics import f1_score
-import matplotlib.pyplot as plt
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 import numpy as np
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
@@ -69,12 +68,19 @@ if __name__=='__main__':
     ], remainder='passthrough')
 
     df_filter = pd.DataFrame(pipeline.fit_transform(df), columns=df.columns)
+    dir_path = f'results/N{args.n_iterations}B{args.n_train}'
+    os.makedirs(dir_path, exist_ok=True)
 
     tree = DecisionTree(max_depth=200, min_points_per_leaf=20, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
 
     n_test = len(df_filter) - (args.n_train * args.n_iterations) - 1
 
+    print('------------------------------------')
+    print('Start Train')
+    print('------------------------------------')
+
     for i in range(args.n_iterations):
+
         print('Iteration: ', i)
 
         start_train = i * args.n_train
@@ -88,16 +94,30 @@ if __name__=='__main__':
             root = tree.partial_fit(root, data_train, labels_train)
 
         if i == args.n_iterations - 1:
+
+            print('------------------------------------')
+            print('Start Test')
+            print('------------------------------------')
+
             start_test = end_train
             end_test = start_test + n_test
             data_test, labels_test = df_filter.iloc[:-1, :-1][start_test:end_test].copy(deep=True), df_filter['Label'][start_test:end_test].copy(deep=True)
 
-            get_anomalies = tree.detect_anomalies(root, data_test)
-            print(f1_score(labels_test, get_anomalies.sort_index()['Label'], average='macro'))
-            differences = sum(1 if x != y else 0 for x, y in zip(labels_test, get_anomalies.sort_index()['Label']))
-            print(differences, len(labels_test))
+            # get_anomalies = tree.detect_anomalies(root, data_test)
+            results = tree.detect_anomalies_with_mad(root, data_test, labels_test)
+            results.to_csv(f'{dir_path}/results_cicids.csv', index=False)
 
-    # print(get_anomalies)
+            f1_score_macro = f1_score(results['Label'], results['Predicted'], average='macro')
+            f1_score_micro = f1_score(results['Label'], results['Predicted'], average='micro')
+            acc = accuracy_score(results['Label'], results['Predicted'])
+            precision = precision_score(results['Label'], results['Predicted'], average='macro')
+            recall = recall_score(results['Label'], results['Predicted'], average='macro')
 
-    # Create the figure and first axis
-    # print(f1_score(labels10, get_anomalies.sort_index()['Label'], average='macro'))
+            print('------------------------------------')
+            print('F1 Score Macro: ', f1_score_macro)
+            print('F1 Score Micro: ', f1_score_micro)
+            print('Accuracy: ', acc)
+            print('Precision: ', precision)
+            print('Recall: ', recall)
+            print('------------------------------------')
+
