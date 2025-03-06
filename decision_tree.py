@@ -1,10 +1,11 @@
+from statistics import median
+
 import oapackage
 import random
 
 import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 from TreeNode import TreeNode
-from sklearn.metrics import silhouette_score
 import numpy as np
 from copy import deepcopy
 from sklearn.cluster import KMeans
@@ -267,6 +268,54 @@ class DecisionTree:
             left_data = self.detect_anomalies(node.left, left_data)
             right_data = self.detect_anomalies(node.right, right_data)
             return pd.concat([left_data, right_data], axis=0)
+
+
+    def detect_anomalies_with_mad(self, node, data, label_test, T_mad=3.5):
+        if node.is_leaf():
+            results = pd.DataFrame(columns=['Label', 'Prediction'])
+            centroids = self.find_centroid(node)
+            median_d_i, MAD = self.compute_mad(node, centroids)
+
+            for index, row in data.iterrows():
+                A_inst = []
+                d_inst = []
+                for j in range(int(node.labels.max() + 1)):
+                    d_i = np.linalg.norm(row.values - centroids.iloc[j, 1:].values.reshape(1, -1), axis=1) # distanza tra il centroide e l'istanza
+                    A_inst.append((d_i - median_d_i[j])/MAD[j])
+                    d_inst.append(d_i)
+
+                A = min(A_inst)
+                if A > T_mad:
+                    print(index, ': Drift')
+                # else:
+                #     print('No Drift')
+
+                closest_class = np.argmin(d_inst)
+                print('Index: ', index, ' Closest Class: ', closest_class, ' Right Label: ', label_test.iloc[index])
+
+                results.loc[len(results)] = [label_test.iloc[index], closest_class]
+
+            return results
+        else:
+            left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)
+            left_data = self.detect_anomalies_with_mad(node.left, left_data, left_labels)
+            right_data = self.detect_anomalies_with_mad(node.right, right_data, right_labels)
+            return pd.concat([left_data, right_data], axis=0)
+
+
+    def compute_mad(self, node, centroids, b=1.4826):
+        MAD = {}
+        median_d_i = {}
+        for j in range(int(node.labels.max()+1)):
+            index = [i for i, el in enumerate(node.labels) if node.labels[i] == j]
+            d_i = np.linalg.norm(node.data.iloc[index].values - centroids.iloc[j, 1:].values.reshape(1, -1), axis=1) # centroid distance for each sample in the class
+            median_d_i[j] = median(d_i)  # Mediana delle distanze tra il centroide e i punti della classe
+            MAD[j] = b*median(np.abs(median_d_i[j] - d_i)) # MAD per la classe j
+
+        return median_d_i, MAD
+
+
+
 
     #TODO: Controllare perché il primo valore del dataframe ritorna 2 volte
     #TODO: Fare in modo che quando arrivano nella funzione anomaly score al posto di perc ci sia il valore di anomalia calcoalto da LOF
