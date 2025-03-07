@@ -1,4 +1,6 @@
+import json
 import os
+import time
 from argparse import ArgumentParser
 
 import pandas as pd
@@ -10,7 +12,7 @@ from decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from pandas.errors import SettingWithCopyWarning
-from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer
+from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, MinMaxScaler
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 import numpy as np
 
@@ -62,7 +64,8 @@ if __name__=='__main__':
     pipeline = ColumnTransformer([
         ('numerical', Pipeline([
             ('replace_inf', FunctionTransformer(replace_inf)),
-            ('imputer', SimpleImputer(strategy='median'))
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', MinMaxScaler())
         ]), ordinal_categories),
         ('categorical', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1, dtype=int), categorical_categories)
     ], remainder='passthrough')
@@ -74,6 +77,8 @@ if __name__=='__main__':
     tree = DecisionTree(max_depth=200, min_points_per_leaf=20, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
 
     n_test = len(df_filter) - (args.n_train * args.n_iterations) - 1
+
+    total_time = time.time()
 
     print('------------------------------------')
     print('Start Train')
@@ -103,21 +108,31 @@ if __name__=='__main__':
             end_test = start_test + n_test
             data_test, labels_test = df_filter.iloc[:-1, :-1][start_test:end_test].copy(deep=True), df_filter['Label'][start_test:end_test].copy(deep=True)
 
+            test_time = time.time()
             # get_anomalies = tree.detect_anomalies(root, data_test)
             results = tree.detect_anomalies_with_mad(root, data_test, labels_test)
             results.to_csv(f'{dir_path}/results_cicids.csv', index=False)
+            test_time = time.time() - test_time
 
-            f1_score_macro = f1_score(results['Label'], results['Predicted'], average='macro')
-            f1_score_micro = f1_score(results['Label'], results['Predicted'], average='micro')
-            acc = accuracy_score(results['Label'], results['Predicted'])
-            precision = precision_score(results['Label'], results['Predicted'], average='macro')
-            recall = recall_score(results['Label'], results['Predicted'], average='macro')
+            metrics = {
+                'f1_score_macro': f1_score(results['Label'], results['Predicted'], average='macro'),
+                'f1_score_micro': f1_score(results['Label'], results['Predicted'], average='micro'),
+                'acc': accuracy_score(results['Label'], results['Predicted']),
+                'precision': precision_score(results['Label'], results['Predicted'], average='macro'),
+                'recall': recall_score(results['Label'], results['Predicted'], average='macro'),
+                'test_time': test_time
+            }
+
+            with open(f'{dir_path}/metrics.json', 'w') as f:
+                json.dump(metrics, f, indent=4)
 
             print('------------------------------------')
-            print('F1 Score Macro: ', f1_score_macro)
-            print('F1 Score Micro: ', f1_score_micro)
-            print('Accuracy: ', acc)
-            print('Precision: ', precision)
-            print('Recall: ', recall)
+            print('F1 Score Macro: ', metrics['f1_score_macro'])
+            print('F1 Score Micro: ', metrics['f1_score_micro'])
+            print('Accuracy: ', metrics['acc'])
+            print('Precision: ', metrics['precision'])
+            print('Recall: ', metrics['recall'])
             print('------------------------------------')
+            print('Test Time: ', test_time)
 
+    print('Total Time: ', time.time() - total_time)
