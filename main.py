@@ -10,6 +10,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
+import load_dataset
 from decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
@@ -43,7 +44,7 @@ def replace_inf(x):
 
 if __name__=='__main__':
     args = ArgumentParser()
-    args.add_argument('--dataset', type=str, default='cicids')
+    args.add_argument('--dataset', type=str, default='cicids_2017')
     args.add_argument('--train_perc', type=int, default=0.2)
     args.add_argument('--batch_size', type=int, default=200)
     args.add_argument('--max_depth', type=int, default=200)
@@ -54,14 +55,19 @@ if __name__=='__main__':
     args.add_argument('--number_thresholds', type=int, default=2)
     args = args.parse_args()
 
-    df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
-    df = process_timestamps(df)
+    if args.dataset == 'cicids_2017':
+        df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
+        df = process_timestamps(df)
+    elif args.dataset == 'CICIDS2017_improved':
+        df = load_dataset.load_cicids_2017_improved(args.dataset)
+    else:
+        raise ValueError(f'Unknown dataset: {args.dataset}')
 
     categorical_categories = [i for i, col in enumerate(df.columns) if df[col].dtype == 'object']
-    print('Ordinal Categories: ', categorical_categories)
+    print('Ordinal Categories: ', len(categorical_categories))
 
     ordinal_categories = [i for i, col in enumerate(df.columns) if i not in categorical_categories]
-    print('Ordinal Categories: ', ordinal_categories)
+    print('Ordinal Categories: ', len(ordinal_categories))
 
     pipeline = ColumnTransformer([
         ('numerical', Pipeline([
@@ -90,7 +96,7 @@ if __name__=='__main__':
 
     for i in tqdm(range(args.batch_size, train_end, args.batch_size)):
 
-        data_train, labels_train = df_filter.iloc[:-1, :-1][i:i+args.batch_size], df_filter['Label'][i:i+args.batch_size]
+        data_train, labels_train = df_filter.iloc[:, :-1][i:i+args.batch_size], df_filter['Label'][i:i+args.batch_size]
 
         if i == args.batch_size:
             root = tree.partial_fit(None, data_train, labels_train)
@@ -102,7 +108,7 @@ if __name__=='__main__':
     print('Start Test')
     print('------------------------------------')
 
-    data_test, labels_test = df_filter.iloc[:-1, :-1][train_end:].copy(deep=True), df_filter['Label'][train_end:].copy(deep=True)
+    data_test, labels_test = df_filter.iloc[train_end:, :-1].copy(deep=True), df_filter.loc[train_end:, 'Label'].copy(deep=True)
 
     test_time = time.time()
     # get_anomalies = tree.detect_anomalies(root, data_test)
