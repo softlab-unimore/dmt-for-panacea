@@ -3,3 +3,4 @@ pandas
 scikit_learn
 matplotlib
 oapackage
+tqdm
