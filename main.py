@@ -113,7 +113,7 @@ if __name__=='__main__':
     test_time = time.time()
     # get_anomalies = tree.detect_anomalies(root, data_test)
     results = tree.detect_anomalies_with_mad(root, data_test, labels_test)
-    results.to_csv(f'{dir_path}/results_cicids.csv', index=False)
+    results.to_csv(f'{dir_path}/results_{args.dataset}.csv', index=False)
     test_time = time.time() - test_time
 
     metrics = {
