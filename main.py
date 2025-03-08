@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
+from tqdm import tqdm
 
 from decision_tree import DecisionTree
 import warnings
@@ -87,9 +88,7 @@ if __name__=='__main__':
     print('Start Train')
     print('------------------------------------')
 
-    for i in range(args.batch_size, train_end, args.batch_size):
-
-        print('Iteration: ', i)
+    for i in tqdm(range(args.batch_size, train_end, args.batch_size)):
 
         data_train, labels_train = df_filter.iloc[:-1, :-1][i:i+args.batch_size], df_filter['Label'][i:i+args.batch_size]
 
