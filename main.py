@@ -1,103 +1,137 @@
+import json
+import os
+import time
+from argparse import ArgumentParser
+from datetime import datetime
+
 import pandas as pd
-import numpy as np
-import warnings
-import matplotlib.pyplot as plt
-from sklearn.datasets import make_blobs
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+
 from decision_tree import DecisionTree
-from sklearn.decomposition import PCA
-from copy import deepcopy
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+from pandas.errors import SettingWithCopyWarning
+from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, MinMaxScaler
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
+import numpy as np
 
-warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
+
+def process_timestamps(df):
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'], format='%d/%m/%Y %H:%M:%S')
+
+    date_cols = {
+        'year': df['Timestamp'].dt.year,
+        'month': df['Timestamp'].dt.month,
+        'day': df['Timestamp'].dt.day,
+        'hour': df['Timestamp'].dt.hour,
+        'minute': df['Timestamp'].dt.minute,
+        'weekday': df['Timestamp'].dt.weekday
+    }
+
+    df = pd.concat([pd.DataFrame(date_cols), df.drop(columns=['Timestamp'])], axis=1)
+    return df
+
+def replace_inf(x):
+    x = np.where(np.isinf(x), np.finfo(np.float64).max, x)
+    x = np.where(np.isneginf(x), np.finfo(np.float64).min, x)
+    return x
+
+if __name__=='__main__':
+    args = ArgumentParser()
+    args.add_argument('--dataset', type=str, default='cicids')
+    args.add_argument('--train_perc', type=int, default=0.2)
+    args.add_argument('--batch_size', type=int, default=200)
+    args.add_argument('--max_depth', type=int, default=200)
+    args.add_argument('--min_points_per_leaf', type=int, default=20)
+    args.add_argument('--closest_k_points', type=float, default=0.1)
+    args.add_argument('--closer_DBSCAN_point', type=float, default=0.1)
+    args.add_argument('--eps_DBSCAN', type=float, default=0.1)
+    args.add_argument('--number_thresholds', type=int, default=2)
+    args = args.parse_args()
+
+    df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
+    df = process_timestamps(df)
+
+    categorical_categories = [i for i, col in enumerate(df.columns) if df[col].dtype == 'object']
+    print('Ordinal Categories: ', categorical_categories)
+
+    ordinal_categories = [i for i, col in enumerate(df.columns) if i not in categorical_categories]
+    print('Ordinal Categories: ', ordinal_categories)
+
+    pipeline = ColumnTransformer([
+        ('numerical', Pipeline([
+            ('replace_inf', FunctionTransformer(replace_inf)),
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', MinMaxScaler())
+        ]), ordinal_categories),
+        ('categorical', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1, dtype=int), categorical_categories)
+    ], remainder='passthrough')
+
+    df_filter = pd.DataFrame(pipeline.fit_transform(df), columns=df.columns)
+    dir_path = f'results/T{args.train_perc}B{args.batch_size}/run_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    os.makedirs(dir_path, exist_ok=True)
+
+    tree = DecisionTree(max_depth=200, min_points_per_leaf=20, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
+
+    train_end = int(len(df_filter) * args.train_perc)
+    if train_end % args.batch_size != 0:
+        train_end = train_end - (train_end % args.batch_size)
+
+    total_time = time.time()
+
+    print('------------------------------------')
+    print('Start Train')
+    print('------------------------------------')
+
+    for i in range(args.batch_size, train_end, args.batch_size):
+
+        print('Iteration: ', i)
+
+        data_train, labels_train = df_filter.iloc[:-1, :-1][i:i+args.batch_size], df_filter['Label'][i:i+args.batch_size]
+
+        if i == args.batch_size:
+            root = tree.partial_fit(None, data_train, labels_train)
+        else:
+            root = tree.partial_fit(root, data_train, labels_train)
 
 
-if __name__ == "__main__":
-    # Generazione di dati di esempio
+    print('------------------------------------')
+    print('Start Test')
+    print('------------------------------------')
 
-    # Generate dataset
-    n_samples = 1000  # Number of data points
-    n_features = 4  # Number of features (dimensions)
-    centers = 4  # Number of clusters (blobs)
-    cluster_std = 1.0  # Standard deviation of the clusters
+    data_test, labels_test = df_filter.iloc[:-1, :-1][train_end:].copy(deep=True), df_filter['Label'][train_end:].copy(deep=True)
 
-    data, labels = make_blobs(n_samples=n_samples, n_features=n_features, centers=centers, cluster_std=cluster_std, random_state=42)
-    # Convert X into a pandas DataFrame with column names feature1, feature2, etc.
-    column_names = [f'feature{i + 1}' for i in range(n_features)]
-    data = pd.DataFrame(data, columns=column_names)
-    np.random.seed(42)
-    # data = pd.DataFrame(np.random.rand(10,4), columns=['feature1', 'feature2', 'feature3', 'feature4'])
-    # labels = np.random.randint(0, 2, 10)  # Due classi
+    test_time = time.time()
+    # get_anomalies = tree.detect_anomalies(root, data_test)
+    results = tree.detect_anomalies_with_mad(root, data_test, labels_test)
+    results.to_csv(f'{dir_path}/results_cicids.csv', index=False)
+    test_time = time.time() - test_time
 
+    metrics = {
+        'f1_score_macro': f1_score(results['Label'], results['Predicted'], average='macro'),
+        'f1_score_micro': f1_score(results['Label'], results['Predicted'], average='micro'),
+        'acc': accuracy_score(results['Label'], results['Predicted']),
+        'precision': precision_score(results['Label'], results['Predicted'], average='macro'),
+        'recall': recall_score(results['Label'], results['Predicted'], average='macro'),
+        'test_time': test_time,
+        'total_time': time.time() - total_time
+    }
 
-    # TODO: TOGLIERE I DATI SUI NODI INTERNI, CHE STANNO GIA SULLE FOGLIE
+    print('------------------------------------')
+    print('F1 Score Macro: ', metrics['f1_score_macro'])
+    print('F1 Score Micro: ', metrics['f1_score_micro'])
+    print('Accuracy: ', metrics['acc'])
+    print('Precision: ', metrics['precision'])
+    print('Recall: ', metrics['recall'])
+    print('Test Time: ', test_time)
+    print('Total Time: ', time.time() - total_time)
+    print('------------------------------------')
 
-    # Inizializzare e addestrare l'albero decisionale
-    tree = DecisionTree(max_depth=10, min_points_per_leaf=5, closest_k_points=0.8, closer_DBSCAN_point=0.1, eps_DBSCAN=0.9)
-    data1, labels1 = data[:100], labels[:100]
-    data2, labels2 = data[100:200], labels[100:200]
-    data3, labels3 = data[200:300], labels[200:300]
-    data4, labels4 = data[300:400], labels[300:400]
-    data5, labels5 = data[400:500], labels[400:500]
-    data6, labels6 = data[500:600], labels[500:600]
-    data7, labels7 = data[600:700], labels[600:700]
-    data8, labels8 = data[700:800], labels[700:800]
-    data9, labels9 = data[800:900], labels[800:900]
-    data10, labels10 = data[900:1000], labels[900:1000]
-    data10.iloc[20:25] += 50
-    data10.iloc[70:80] += 1000
-    data10.iloc[10:11] += 60
+    with open(f'{dir_path}/metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=4)
 
-    # data10.iloc[60:80] += 2
-
-    root = tree.partial_fit(None, data1, labels1)
-
-    tree.partial_fit(root, data2, labels2)
-
-    tree.partial_fit(root, data3, labels3)
-
-    tree.partial_fit(root, data4, labels4)
-
-    tree.partial_fit(root, data5, labels5)
-
-    tree.partial_fit(root, data6, labels6)
-
-    tree.partial_fit(root, data7, labels7)
-
-    tree.partial_fit(root, data8, labels8)
-
-    tree.partial_fit(root, data9, labels9)
-
-    get_anomalies = tree.detect_anomalies(root, data10)
-
-
-    df = deepcopy(get_anomalies)
-    df = df.sort_index()
-
-    # Create the figure and first axis
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-
-    # Plot Feature1 and Feature2 on the first y-axis
-    ax1.plot(df.index, df["feature1"], label="Feature1", color="blue")
-    ax1.plot(df.index, df["feature2"], label="Feature2", color="green")
-    ax1.plot(df.index, df["feature3"], label="Feature3", color="orange")
-    ax1.plot(df.index, df["feature4"], label="Feature4", color="purple")
-    ax1.set_xlabel("Time")
-    ax1.set_ylabel("Feature1, Feature2, Feature3, Feature4", color="blue")
-    ax1.tick_params(axis='y', labelcolor="blue")
-    ax1.legend(loc="upper left")
-
-    # Create the second y-axis and plot Feature3 and Feature4
-    ax2 = ax1.twinx()
-    ax2.scatter(df.index, df["lof"], label="Feature3", color="red")  # Use scatter instead of plot
-    ax2.set_ylabel("lof", color="red")
-    ax2.tick_params(axis='y', labelcolor="red")
-    ax2.legend(loc="upper right")
-
-    # Show plot
-    plt.title("Multivariate Time Series with Dual Y-Axes")
-    plt.show()
-
-    # print(get_anomalies)
-    # Stampa dell'albero
-    # print(tree)
-
-    # Qui si può applicare l'ottimizzazione incrementale se desiderato
+    print('Finish')
