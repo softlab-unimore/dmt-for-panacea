@@ -44,8 +44,8 @@ def replace_inf(x):
 
 if __name__=='__main__':
     args = ArgumentParser()
-    args.add_argument('--dataset', type=str, default='cicids_2017')
-    args.add_argument('--train_perc', type=int, default=0.2)
+    args.add_argument('--dataset', type=str, default='CICIDS2017')
+    args.add_argument('--train_perc', type=float, default=0.01)
     args.add_argument('--batch_size', type=int, default=200)
     args.add_argument('--max_depth', type=int, default=200)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
@@ -55,7 +55,7 @@ if __name__=='__main__':
     args.add_argument('--number_thresholds', type=int, default=2)
     args = args.parse_args()
 
-    if args.dataset == 'cicids_2017':
+    if args.dataset == 'CICIDS2017':
         df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
         df = process_timestamps(df)
     elif args.dataset == 'CICIDS2017_improved':
@@ -86,7 +86,7 @@ if __name__=='__main__':
 
     train_end = int(len(df_filter) * args.train_perc)
     if train_end % args.batch_size != 0:
-        train_end = train_end - (train_end % args.batch_size)
+        train_end = train_end + (train_end % args.batch_size)
 
     total_time = time.time()
 
@@ -94,11 +94,11 @@ if __name__=='__main__':
     print('Start Train')
     print('------------------------------------')
 
-    for i in tqdm(range(args.batch_size, train_end, args.batch_size)):
+    for i in tqdm(range(0, train_end, args.batch_size)):
 
         data_train, labels_train = df_filter.iloc[:, :-1][i:i+args.batch_size], df_filter['Label'][i:i+args.batch_size]
 
-        if i == args.batch_size:
+        if i == 0:
             root = tree.partial_fit(None, data_train, labels_train)
         else:
             root = tree.partial_fit(root, data_train, labels_train)
