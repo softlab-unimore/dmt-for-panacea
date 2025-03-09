@@ -277,9 +277,10 @@ class DecisionTree:
             centroids = self.find_centroid(node)
             median_d_i, MAD = self.compute_mad(node, centroids)
 
-            data = data.to_numpy()
-            dists = np.linalg.norm(data[:, np.newaxis] - centroids.iloc[:, 1:].values, axis=2)
-            A_inst = (dists - median_d_i.T) / MAD.T
+            data_np = data.to_numpy()
+            centroids_np = centroids.iloc[:, 1:].values
+            dists = np.linalg.norm(data_np[:, np.newaxis, :] - centroids_np[np.newaxis, :, :], axis=2)
+            A_inst = np.abs(dists - median_d_i[np.newaxis, :]) / MAD[np.newaxis, :]
 
             min_A_inst = np.min(A_inst, axis=1)
 
@@ -300,10 +301,10 @@ class DecisionTree:
 
     def compute_mad(self, node, centroids, b=1.4826):
         labels = node.labels
-        centroids_values = centroids.iloc[:, 1:].values
-        dists = np.linalg.norm(node.data.values[:, np.newaxis] - centroids_values, axis=2)
-        median_d_i = pd.DataFrame(dists).groupby(labels).median()
-        MAD = (b * pd.DataFrame(abs(pd.DataFrame(dists) - pd.DataFrame(dists).groupby(labels).median())).groupby(labels).median())
+        centroid_map = {row[0]: row[1:] for row in centroids.to_numpy()} #Mappa tra label e centroide
+        dists = np.array([np.linalg.norm(node.data.values[i] - centroid_map[labels[i]]) for i in range(len(labels))])
+        median_d_i = pd.Series(dists).groupby(labels).median()
+        MAD = b * pd.Series(np.abs(dists - median_d_i[labels].to_numpy())).groupby(labels).median()
         return median_d_i.to_numpy(), MAD.to_numpy()
 
     #TODO: Controllare perché il primo valore del dataframe ritorna 2 volte
