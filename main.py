@@ -52,10 +52,10 @@ if __name__=='__main__':
     else:
         raise ValueError(f'Unknown dataset: {args.dataset}')
 
-    categorical_categories = [i for i, col in enumerate(df_train.columns) if df_train[col].dtype == 'object']
-    print('Ordinal Categories: ', len(categorical_categories))
+    categorical_categories = [i + 6 for i, col in enumerate(df_train.columns[6:]) if df_train[col].dtype == 'object' or df_train[col].dtype == 'O']
+    print('Categorical Categories: ', len(categorical_categories))
 
-    ordinal_categories = [i for i, col in enumerate(df_train.columns) if i not in categorical_categories]
+    ordinal_categories = [i + 6 for i, col in enumerate(df_train.columns[6:]) if (i + 6) not in categorical_categories]
     print('Ordinal Categories: ', len(ordinal_categories))
 
     pipeline = ColumnTransformer([
