@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 def process_timestamps(df, format='%d/%m/%Y %H:%M:%S'):
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], format=format)
 
@@ -23,7 +22,7 @@ def load_cicids_2017_improved(dataset):
     df_test = pd.concat([pd.read_csv(f'./datasets/{dataset}/{file}', delimiter=',') for file in test_files], axis=0)
     df_train = process_timestamps(df_train, format='%Y-%m-%d %H:%M:%S.%f')
     df_test = process_timestamps(df_test, format='%Y-%m-%d %H:%M:%S.%f')
-    return df_train, df_test
+    return df_train.iloc[:, :-1], df_test.iloc[:, :-1]
 
 
 def load_cicids_2017(dataset):
