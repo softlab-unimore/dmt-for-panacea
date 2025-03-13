@@ -30,7 +30,7 @@ def replace_inf(x):
 
 if __name__=='__main__':
     args = ArgumentParser()
-    args.add_argument('--dataset', type=str, default='CICIDS2017_improved')
+    args.add_argument('--dataset', type=str, default='CICIDS2017')
     args.add_argument('--batch_size', type=int, default=200)
     args.add_argument('--max_depth', type=int, default=200)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
@@ -40,10 +40,18 @@ if __name__=='__main__':
     args.add_argument('--number_thresholds', type=int, default=2)
     args = args.parse_args()
 
-    if args.dataset == 'CICIDS2017':
-        df_train, df_test = load_dataset.load_cicids_2017(args.dataset)
-    elif args.dataset == 'CICIDS2017_improved':
+    if args.dataset == 'CICIDS2017_improved':
         df_train, df_test = load_dataset.load_cicids_2017_improved(args.dataset)
+    elif args.dataset == 'CICIDS2017':
+        df_train, df_test = load_dataset.load_cicids_2017(args.dataset)
+    elif args.dataset == 'IDS2018':
+        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='NewTestData.csv')
+    elif args.dataset == 'Kitsune':
+        df_train, df_test = load_dataset.load_csv(args.dataset)
+    elif args.dataset == 'mKitsune':
+        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='NewTestData.csv')
+    elif args.dataset == 'rKitsune':
+        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='Recurring.csv')
     elif args.dataset == 'CICIDS2017_prova':
         df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
         df = load_dataset.process_timestamps(df)
@@ -52,19 +60,19 @@ if __name__=='__main__':
     else:
         raise ValueError(f'Unknown dataset: {args.dataset}')
 
-    categorical_categories = [i + 6 for i, col in enumerate(df_train.columns[6:]) if df_train[col].dtype == 'object' or df_train[col].dtype == 'O']
-    print('Categorical Categories: ', len(categorical_categories))
+    ordinal_categories = [i  for i, col in enumerate(df_train.columns) if df_train[col].dtype == 'object' or df_train[col].dtype == 'O']
+    print('Categorical Categories: ', len(ordinal_categories))
 
-    ordinal_categories = [i + 6 for i, col in enumerate(df_train.columns[6:]) if (i + 6) not in categorical_categories]
-    print('Ordinal Categories: ', len(ordinal_categories))
+    numerical_categories = [i  for i, col in enumerate(df_train.columns) if i not in ordinal_categories]
+    print('Ordinal Categories: ', len(numerical_categories))
 
     pipeline = ColumnTransformer([
         ('numerical', Pipeline([
             ('replace_inf', FunctionTransformer(replace_inf)),
             ('imputer', SimpleImputer(strategy='median')),
             ('scaler', MinMaxScaler())
-        ]), ordinal_categories),
-        ('categorical', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1, dtype=int), categorical_categories)
+        ]), numerical_categories),
+        ('categorical', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1, dtype=int), ordinal_categories)
     ], remainder='passthrough')
 
     df_train = pd.DataFrame(pipeline.fit_transform(df_train), columns=df_train.columns)
@@ -72,7 +80,7 @@ if __name__=='__main__':
     dir_path = f'results/B{args.batch_size}/{args.dataset}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
     os.makedirs(dir_path, exist_ok=True)
 
-    tree = DecisionTree(max_depth=200, min_points_per_leaf=20, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
+    tree = DecisionTree(max_depth=args.max_depth, min_points_per_leaf=args.min_points_per_leaf, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
 
     total_time = time.time()
 
@@ -83,15 +91,11 @@ if __name__=='__main__':
     if df_train.shape[0] % args.batch_size != 0:
         df_train = df_train.iloc[:-(df_train.shape[0] % args.batch_size)]
 
-    for i in tqdm(range(0, df_train.shape[0], args.batch_size)):
+    root = tree.partial_fit(None, df_train.iloc[:, :-1][:args.batch_size], df_train['Label'][:args.batch_size])
 
+    for i in tqdm(range(args.batch_size, df_train.shape[0], args.batch_size)):
         data_train, labels_train = df_train.iloc[:, :-1][i:i+args.batch_size], df_train['Label'][i:i+args.batch_size]
-
-        if i == 0:
-            root = tree.partial_fit(None, data_train, labels_train)
-        else:
-            root = tree.partial_fit(root, data_train, labels_train)
-
+        root = tree.partial_fit(root, data_train, labels_train)
 
     print('------------------------------------')
     print('Start Test')
