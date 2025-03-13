@@ -4,3 +4,4 @@ scikit_learn
 matplotlib
 oapackage
 tqdm
+seaborn
