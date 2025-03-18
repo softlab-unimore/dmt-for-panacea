@@ -9,7 +9,6 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from tqdm import tqdm
 
 import load_dataset
 from decision_tree import DecisionTree
@@ -36,8 +35,6 @@ if __name__=='__main__':
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--closest_k_points', type=float, default=0.1)
-    args.add_argument('--closer_DBSCAN_point', type=float, default=0.1)
-    args.add_argument('--eps_DBSCAN', type=float, default=0.1)
     args.add_argument('--number_thresholds', type=int, default=2)
     args = args.parse_args()
 
