@@ -1,5 +1,3 @@
-from statistics import median
-
 import oapackage
 import random
 
@@ -85,6 +83,7 @@ class DecisionTree:
             node.left = TreeNode(left_data, left_labels, depth=depth, max_depth=self.max_depth)
             node.right = TreeNode(right_data, right_labels, depth=depth, max_depth=self.max_depth)
             if self.evaluate_split(node_app, node.left, node.right):
+                print('--> Splitting')
                 return node
             else:
                 return node_app
@@ -168,10 +167,11 @@ class DecisionTree:
         return [t[2] for t in thresholds]
 
     def compute_metrics_splitting(self, data, labels):
-        sil_score = util.compute_silhouette(data, labels)
+        # sil_score = util.compute_silhouette(data, labels)
         # entropy_score = -util.compute_entropy(labels)
         homogeneity_score = util.compute_homogeneity(labels)
-        return [sil_score, homogeneity_score]
+        # return [sil_score, homogeneity_score]
+        return [homogeneity_score]
 
     def compute_pareto_optimality(self, features_results):
         # Create a Pareto object
@@ -246,8 +246,9 @@ class DecisionTree:
     def evaluate_split(self, node_parent, node_left, node_right):
         # entropy_gain = self.entropy_gain(node_parent, node_left, node_right)
         homogeneity_gain = self.homogeneity_gain(node_parent, node_left, node_right)
-        silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
-        if homogeneity_gain > 0 and silhouette_gain > 0:
+        # silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
+        # if homogeneity_gain > 0 and silhouette_gain > 0:
+        if homogeneity_gain > 0:
             return True
         else:
             return False

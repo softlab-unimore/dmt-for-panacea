@@ -1,5 +1,6 @@
 import json
 import os
+import pickle
 import time
 from argparse import ArgumentParser
 from datetime import datetime
@@ -31,8 +32,8 @@ def replace_inf(x):
 if __name__=='__main__':
     args = ArgumentParser()
     args.add_argument('--dataset', type=str, default='CICIDS2017')
-    args.add_argument('--batch_size', type=int, default=200)
-    args.add_argument('--max_depth', type=int, default=200)
+    args.add_argument('--batch_size', type=int, default=10000)
+    args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--closest_k_points', type=float, default=0.1)
     args.add_argument('--closer_DBSCAN_point', type=float, default=0.1)
@@ -49,9 +50,9 @@ if __name__=='__main__':
     elif args.dataset == 'Kitsune':
         df_train, df_test = load_dataset.load_csv(args.dataset)
     elif args.dataset == 'mKitsune':
-        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='NewTestData.csv')
+        df_train, df_test = load_dataset.load_csv(dataset='Kitsune', test_file='NewTestData.csv')
     elif args.dataset == 'rKitsune':
-        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='Recurring.csv')
+        df_train, df_test = load_dataset.load_csv(dataset='Kitsune', test_file='Recurring.csv')
     elif args.dataset == 'CICIDS2017_prova':
         df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
         df = load_dataset.process_timestamps(df)
@@ -91,11 +92,17 @@ if __name__=='__main__':
     if df_train.shape[0] % args.batch_size != 0:
         df_train = df_train.iloc[:-(df_train.shape[0] % args.batch_size)]
 
+    print(f'Batch: 0/{df_train.shape[0]}')
     root = tree.partial_fit(None, df_train.iloc[:, :-1][:args.batch_size], df_train['Label'][:args.batch_size])
 
-    for i in tqdm(range(args.batch_size, df_train.shape[0], args.batch_size)):
+    for i in range(args.batch_size, df_train.shape[0], args.batch_size):
+        print(f'Batch: {i}/{df_train.shape[0]}')
         data_train, labels_train = df_train.iloc[:, :-1][i:i+args.batch_size], df_train['Label'][i:i+args.batch_size]
         root = tree.partial_fit(root, data_train, labels_train)
+
+    print('Saving tree...')
+    with open(f'{dir_path}/tree.pkl', 'w') as f:
+        pickle.dump(root, f)
 
     print('------------------------------------')
     print('Start Test')
