@@ -98,7 +98,7 @@ if __name__=='__main__':
         root = tree.partial_fit(root, data_train, labels_train)
 
     print('Saving tree...')
-    with open(f'{dir_path}/tree.pkl', 'w') as f:
+    with open(f'{dir_path}/tree.pkl', 'wb') as f:
         pickle.dump(root, f)
 
     print('------------------------------------')
