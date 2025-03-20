@@ -1,5 +1,5 @@
 from skmultiflow.data import FileStream
-from dmt2.DMT import DynamicModelTree
+from DMT.DMT import DynamicModelTree
 from sklearn.metrics import accuracy_score
 
 from util import get_metrics, save_metrics
@@ -118,8 +118,8 @@ class DMTRunner:
 if __name__ == "__main__":
     args = get_args()
     print("Preprocessing dataset...")
-    train_path = "dmt2/preprocessed_datasets/train.csv"
-    test_path = "dmt2/preprocessed_datasets/test.csv"
+    train_path = "DMT/preprocessed_datasets/train.csv"
+    test_path = "DMT/preprocessed_datasets/test.csv"
     df_train, df_test = get_dataset(args)
     df_train, df_test, metadata = preprocess(df_train, df_test) #metadata may contain categorical features, which should be added in params
     print("Preprocessing finished. Saving datasets to disk...")
