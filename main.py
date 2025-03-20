@@ -1,34 +1,24 @@
-import json
 import os
 import pickle
 import time
-from argparse import ArgumentParser
 from datetime import datetime
 
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
 
-import load_dataset
+from argparse import ArgumentParser
 from decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from pandas.errors import SettingWithCopyWarning
-from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, MinMaxScaler
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 import numpy as np
+
+from preprocessing import preprocess
+from util import get_metrics, save_metrics
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
-
-def replace_inf(x):
-    x = np.where(np.isinf(x), np.finfo(np.float64).max, x)
-    x = np.where(np.isneginf(x), np.finfo(np.float64).min, x)
-    return x
-
-if __name__=='__main__':
+def get_args():
     args = ArgumentParser()
     args.add_argument('--dataset', type=str, default='CICIDS2017')
     args.add_argument('--batch_size', type=int, default=10000)
@@ -38,43 +28,12 @@ if __name__=='__main__':
     args.add_argument('--number_thresholds', type=int, default=2)
     args = args.parse_args()
 
-    if args.dataset == 'CICIDS2017_improved':
-        df_train, df_test = load_dataset.load_cicids_2017_improved(args.dataset)
-    elif args.dataset == 'CICIDS2017':
-        df_train, df_test = load_dataset.load_cicids_2017(args.dataset)
-    elif args.dataset == 'IDS2018':
-        df_train, df_test = load_dataset.load_csv(args.dataset, test_file='NewTestData.csv')
-    elif args.dataset == 'Kitsune':
-        df_train, df_test = load_dataset.load_csv(args.dataset)
-    elif args.dataset == 'mKitsune':
-        df_train, df_test = load_dataset.load_csv(dataset='Kitsune', test_file='NewTestData.csv')
-    elif args.dataset == 'rKitsune':
-        df_train, df_test = load_dataset.load_csv(dataset='Kitsune', test_file='Recurring.csv')
-    elif args.dataset == 'CICIDS2017_prova':
-        df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
-        df = load_dataset.process_timestamps(df)
-        train_end = int(len(df) * 0.2)
-        df_train, df_test = df.iloc[:train_end], df.iloc[train_end:]
-    else:
-        raise ValueError(f'Unknown dataset: {args.dataset}')
+    return args
 
-    ordinal_categories = [i  for i, col in enumerate(df_train.columns) if df_train[col].dtype == 'object' or df_train[col].dtype == 'O']
-    print('Categorical Categories: ', len(ordinal_categories))
-
-    numerical_categories = [i  for i, col in enumerate(df_train.columns) if i not in ordinal_categories]
-    print('Ordinal Categories: ', len(numerical_categories))
-
-    pipeline = ColumnTransformer([
-        ('numerical', Pipeline([
-            ('replace_inf', FunctionTransformer(replace_inf)),
-            ('imputer', SimpleImputer(strategy='median')),
-            ('scaler', MinMaxScaler())
-        ]), numerical_categories),
-        ('categorical', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1, dtype=int), ordinal_categories)
-    ], remainder='passthrough')
-
-    df_train = pd.DataFrame(pipeline.fit_transform(df_train), columns=df_train.columns)
-    df_test = pd.DataFrame(pipeline.transform(df_test), columns=df_test.columns)
+if __name__=='__main__':
+    args = get_args()
+    df_train, df_test = get_dataset(args)
+    df_train, df_test, _ = preprocess(df_train, df_test)
     dir_path = f'results/B{args.batch_size}/{args.dataset}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
     os.makedirs(dir_path, exist_ok=True)
 
@@ -113,27 +72,7 @@ if __name__=='__main__':
     results.to_csv(f'{dir_path}/results_{args.dataset}.csv', index=False)
     test_time = time.time() - test_time
 
-    metrics = {
-        'f1_score_macro': f1_score(results['Label'], results['Predicted'], average='macro'),
-        'f1_score_micro': f1_score(results['Label'], results['Predicted'], average='micro'),
-        'acc': accuracy_score(results['Label'], results['Predicted']),
-        'precision': precision_score(results['Label'], results['Predicted'], average='macro'),
-        'recall': recall_score(results['Label'], results['Predicted'], average='macro'),
-        'test_time': test_time,
-        'total_time': time.time() - total_time
-    }
-
-    print('------------------------------------')
-    print('F1 Score Macro: ', metrics['f1_score_macro'])
-    print('F1 Score Micro: ', metrics['f1_score_micro'])
-    print('Accuracy: ', metrics['acc'])
-    print('Precision: ', metrics['precision'])
-    print('Recall: ', metrics['recall'])
-    print('Test Time: ', test_time)
-    print('Total Time: ', time.time() - total_time)
-    print('------------------------------------')
-
-    with open(f'{dir_path}/metrics.json', 'w') as f:
-        json.dump(metrics, f, indent=4)
+    metrics = get_metrics(results, test_time, total_time)
+    save_metrics(metrics, dir_path)
 
     print('Finish')

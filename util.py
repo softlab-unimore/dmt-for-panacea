@@ -3,6 +3,9 @@ import math
 from collections import Counter
 from sklearn.metrics import silhouette_score
 
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
+import time
+import json
 
 def compute_entropy(labels):
     # y is a list of class labels in the current node
@@ -41,3 +44,31 @@ def compute_homogeneity(labels):
     score = n_max / N
 
     return score
+
+
+def get_metrics(results, test_time, total_time) -> dict:
+    metrics = {
+        'f1_score_macro': f1_score(results['Label'], results['Predicted'], average='macro'),
+        'f1_score_micro': f1_score(results['Label'], results['Predicted'], average='micro'),
+        'acc': accuracy_score(results['Label'], results['Predicted']),
+        'precision': precision_score(results['Label'], results['Predicted'], average='macro'),
+        'recall': recall_score(results['Label'], results['Predicted'], average='macro'),
+        'test_time': test_time,
+        'total_time': time.time() - total_time
+    }
+
+    print('------------------------------------')
+    print('F1 Score Macro: ', metrics['f1_score_macro'])
+    print('F1 Score Micro: ', metrics['f1_score_micro'])
+    print('Accuracy: ', metrics['acc'])
+    print('Precision: ', metrics['precision'])
+    print('Recall: ', metrics['recall'])
+    print('Test Time: ', metrics['test_time'])
+    print('Total Time: ', metrics['total_time'])
+    print('------------------------------------')
+
+    return metrics
+
+def save_metrics(metrics: dict, dir_path: str):
+    with open(f'{dir_path}/metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=4)

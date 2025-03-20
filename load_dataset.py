@@ -32,3 +32,26 @@ def load_csv(dataset, test_file='TestData.csv'):
 def load_cicids_2017(dataset):
     df = pd.read_csv(f'./datasets/{dataset}/clean_data.csv', delimiter=',')
     return df[:693702], df[693702:]
+
+def get_dataset(args) -> (pd.DataFrame, pd.DataFrame):
+    if args.dataset == 'CICIDS2017_improved':
+        df_train, df_test = load_cicids_2017_improved(args.dataset)
+    elif args.dataset == 'CICIDS2017':
+        df_train, df_test = load_cicids_2017(args.dataset)
+    elif args.dataset == 'IDS2018':
+        df_train, df_test = load_csv(args.dataset, test_file='NewTestData.csv')
+    elif args.dataset == 'Kitsune':
+        df_train, df_test = load_csv(args.dataset)
+    elif args.dataset == 'mKitsune':
+        df_train, df_test = load_csv(dataset='Kitsune', test_file='NewTestData.csv')
+    elif args.dataset == 'rKitsune':
+        df_train, df_test = load_csv(dataset='Kitsune', test_file='Recurring.csv')
+    elif args.dataset == 'CICIDS2017_prova':
+        df = pd.read_csv(f'datasets/{args.dataset}.csv', delimiter=',')
+        df = process_timestamps(df)
+        train_end = int(len(df) * 0.2)
+        df_train, df_test = df.iloc[:train_end], df.iloc[train_end:]
+    else:
+        raise ValueError(f'Unknown dataset: {args.dataset}')
+
+    return df_train, df_test
