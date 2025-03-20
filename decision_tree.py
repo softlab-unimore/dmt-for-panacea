@@ -94,6 +94,8 @@ class DecisionTree:
         n_thresholds = self.number_thresholds + 1
         results_features = {}
         # TODO: Implementare l'algoritmo di ricerca del miglior split
+
+        print('--> Find best split')
         for feature in data.columns:
             # TODO: Implementare l'algoritmo di splitting
             if feature in self.ordinal_categories:
@@ -167,11 +169,11 @@ class DecisionTree:
         return [t[2] for t in thresholds]
 
     def compute_metrics_splitting(self, data, labels):
-        # sil_score = util.compute_silhouette(data, labels)
+        sil_score = util.compute_silhouette(data, labels)
         # entropy_score = -util.compute_entropy(labels)
         homogeneity_score = util.compute_homogeneity(labels)
-        # return [sil_score, homogeneity_score]
-        return [homogeneity_score]
+        return [sil_score, homogeneity_score]
+        # return [homogeneity_score]
 
     def compute_pareto_optimality(self, features_results):
         # Create a Pareto object
@@ -246,9 +248,9 @@ class DecisionTree:
     def evaluate_split(self, node_parent, node_left, node_right):
         # entropy_gain = self.entropy_gain(node_parent, node_left, node_right)
         homogeneity_gain = self.homogeneity_gain(node_parent, node_left, node_right)
-        # silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
-        # if homogeneity_gain > 0 and silhouette_gain > 0:
-        if homogeneity_gain > 0:
+        silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
+        if homogeneity_gain > 0 and silhouette_gain > 0:
+        # if homogeneity_gain > 0:
             return True
         else:
             return False

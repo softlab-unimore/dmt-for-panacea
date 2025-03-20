@@ -30,7 +30,7 @@ class TreeNode:
     def compute_metrics(self):
         # TODO: Compute metrics
         self.metrics = {}
-        # self.metrics["silhouette"] = self.__compute_silhouette()
+        self.metrics["silhouette"] = self.__compute_silhouette()
         self.metrics["homogeneity"] = self.__homogeneity()
         return self.metrics
 
@@ -42,8 +42,6 @@ class TreeNode:
             self.data = pd.concat([self.data, data])
             self.labels = np.concatenate([self.labels, labels])
         self.metrics = self.compute_metrics()
-
-    # TODO: IN CASE THERE IS A SINGLE CLASS WE GIVE 1 BECAUSE WE NEED TO PRIVILEGE SINGULAR CLASS
 
     def __compute_silhouette(self, batch_size=17000):
         if len(np.unique(self.labels)) == 1:

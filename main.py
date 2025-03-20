@@ -10,6 +10,7 @@ from decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from pandas.errors import SettingWithCopyWarning
+from load_dataset import get_dataset
 import numpy as np
 
 from preprocessing import preprocess
@@ -22,6 +23,7 @@ def get_args():
     args = ArgumentParser()
     args.add_argument('--dataset', type=str, default='CICIDS2017')
     args.add_argument('--batch_size', type=int, default=10000)
+    args.add_argument('--mode', type=str, default='')
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--closest_k_points', type=float, default=0.1)
