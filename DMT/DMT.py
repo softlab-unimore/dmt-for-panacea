@@ -1,5 +1,5 @@
 import numpy as np
-from dmt2.Node import Node
+from DMT.Node import Node
 
 
 class DynamicModelTree:
