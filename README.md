@@ -15,3 +15,4 @@ The name of the dataset files should be as follows:
 - Kitsune, rKitsune, mKitsune: `./datasets/Kitsune`'
 
 To use **DMT**, install each requirement separately due to the scikit-multiflow package.
+DMT requires python 3.10.12
