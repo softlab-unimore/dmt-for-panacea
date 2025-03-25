@@ -3,8 +3,7 @@ import numpy as np
 import warnings
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
-from decision_tree import DecisionTree
-from sklearn.decomposition import PCA
+from UnsupervisedDMT.decision_tree import DecisionTree
 from copy import deepcopy
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)

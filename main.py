@@ -3,17 +3,14 @@ import pickle
 import time
 from datetime import datetime
 
-import pandas as pd
-
 from argparse import ArgumentParser
-from decision_tree import DecisionTree
+from UnsupervisedDMT.decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from pandas.errors import SettingWithCopyWarning
-from load_dataset import get_dataset
-import numpy as np
+from data_utils.load_dataset import get_dataset
 
-from preprocessing import preprocess
+from data_utils.preprocessing import preprocess
 from util import get_metrics, save_metrics
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
@@ -35,11 +32,11 @@ def get_args():
 if __name__=='__main__':
     args = get_args()
     df_train, df_test = get_dataset(args)
-    df_train, df_test, _ = preprocess(df_train, df_test)
+    df_train, df_test, cat = preprocess(df_train, df_test)
     dir_path = f'results/B{args.batch_size}/{args.dataset}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
     os.makedirs(dir_path, exist_ok=True)
 
-    tree = DecisionTree(max_depth=args.max_depth, min_points_per_leaf=args.min_points_per_leaf, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=ordinal_categories)
+    tree = DecisionTree(max_depth=args.max_depth, min_points_per_leaf=args.min_points_per_leaf, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=cat['ordinal_categories'])
 
     total_time = time.time()
 

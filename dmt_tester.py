@@ -1,10 +1,9 @@
 from skmultiflow.data import FileStream
 from DMT.DMT import DynamicModelTree
-from sklearn.metrics import accuracy_score
 
 from util import get_metrics, save_metrics
-from load_dataset import get_dataset
-from preprocessing import preprocess
+from data_utils.load_dataset import get_dataset
+from data_utils.preprocessing import preprocess
 from datetime import datetime
 from argparse import ArgumentParser
 from typing import Optional

@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 from tqdm import tqdm
 
-from TreeNode import TreeNode
+from UnsupervisedDMT.TreeNode import TreeNode
 import numpy as np
 from copy import deepcopy
 from sklearn.cluster import KMeans
@@ -67,24 +67,29 @@ class DecisionTree:
         if depth >= self.max_depth: # or len(data) <= self.min_points_per_leaf:
             return node.update_data(data, labels)
 
-        # TODO: Find best split
+        labels_values = np.unique(node.labels)
+
         node_app = deepcopy(node)
         node_app.update_data(data, labels)
 
-        best_split = self.find_best_split(node_app.data, node_app.labels)
-        if best_split:
-            feature, threshold = best_split
-            node.split_feature = feature
-            node.split_threshold = threshold
+        # TODO: Find best split
+        if labels_values.size != 1 or not np.array_equal(labels_values, np.unique(labels)):
+            best_split = self.find_best_split(node_app.data, node_app.labels)
+            if best_split:
+                feature, threshold = best_split
+                node.split_feature = feature
+                node.split_threshold = threshold
 
-            left_data, right_data, left_labels, right_labels = self.apply_split(node_app.data, feature, threshold, node_app.labels)
-            # node.left = self.build_tree(node.left, left_data, left_labels, depth + 1)
-            # node.right = self.build_tree(node.right, right_data, right_labels, depth + 1)
-            node.left = TreeNode(left_data, left_labels, depth=depth, max_depth=self.max_depth)
-            node.right = TreeNode(right_data, right_labels, depth=depth, max_depth=self.max_depth)
-            if self.evaluate_split(node_app, node.left, node.right):
-                print('--> Splitting')
-                return node
+                left_data, right_data, left_labels, right_labels = self.apply_split(node_app.data, feature, threshold, node_app.labels)
+                # node.left = self.build_tree(node.left, left_data, left_labels, depth + 1)
+                # node.right = self.build_tree(node.right, right_data, right_labels, depth + 1)
+                node.left = TreeNode(left_data, left_labels, depth=depth, max_depth=self.max_depth)
+                node.right = TreeNode(right_data, right_labels, depth=depth, max_depth=self.max_depth)
+                if self.evaluate_split(node_app, node.left, node.right):
+                    print('--> Splitting')
+                    return node
+                else:
+                    return node_app
             else:
                 return node_app
         else:
@@ -117,7 +122,9 @@ class DecisionTree:
         if results_features == {}:
             return None
         # Tupla
+        print('Pareto Ottimaly calculation...')
         best_split = self.compute_pareto_optimality(results_features)
+        print('Best Split: ', best_split)
         return best_split
 
     def apply_split(self, data, feature, threshold, labels = None):
@@ -169,11 +176,11 @@ class DecisionTree:
         return [t[2] for t in thresholds]
 
     def compute_metrics_splitting(self, data, labels):
-        sil_score = util.compute_silhouette(data, labels)
+        # sil_score = util.compute_silhouette(data, labels)
         # entropy_score = -util.compute_entropy(labels)
         homogeneity_score = util.compute_homogeneity(labels)
-        return [sil_score, homogeneity_score]
-        # return [homogeneity_score]
+        # return [sil_score, homogeneity_score]
+        return [homogeneity_score]
 
     def compute_pareto_optimality(self, features_results):
         # Create a Pareto object
@@ -248,9 +255,9 @@ class DecisionTree:
     def evaluate_split(self, node_parent, node_left, node_right):
         # entropy_gain = self.entropy_gain(node_parent, node_left, node_right)
         homogeneity_gain = self.homogeneity_gain(node_parent, node_left, node_right)
-        silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
-        if homogeneity_gain > 0 and silhouette_gain > 0:
-        # if homogeneity_gain > 0:
+        # silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
+        # if homogeneity_gain > 0 and silhouette_gain > 0:
+        if homogeneity_gain > 0:
             return True
         else:
             return False

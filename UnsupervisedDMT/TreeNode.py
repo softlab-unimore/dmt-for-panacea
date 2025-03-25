@@ -30,7 +30,7 @@ class TreeNode:
     def compute_metrics(self):
         # TODO: Compute metrics
         self.metrics = {}
-        self.metrics["silhouette"] = self.__compute_silhouette()
+        # self.metrics["silhouette"] = self.__compute_silhouette()
         self.metrics["homogeneity"] = self.__homogeneity()
         return self.metrics
 
