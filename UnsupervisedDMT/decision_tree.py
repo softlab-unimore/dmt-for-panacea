@@ -2,6 +2,7 @@ import oapackage
 import random
 
 import pandas as pd
+from pyparsing import original_text_for
 from sklearn.neighbors import LocalOutlierFactor
 from tqdm import tqdm
 
@@ -19,13 +20,14 @@ from sklearn.preprocessing import MinMaxScaler
 
 # Classe Albero Decisionale
 class DecisionTree:
-    def __init__(self, max_depth=5, min_points_per_leaf=20, closest_k_points=0.5, number_thresholds=3, closer_DBSCAN_point=0.1, eps_DBSCAN=0.9, ordinal_categories=[]):
+    def __init__(self, max_depth=5, min_points_per_leaf=20, closest_k_points=0.5, number_thresholds=3, dist_threshold=0.5, closer_DBSCAN_point=0.1, eps_DBSCAN=0.9, ordinal_categories=[]):
         self.max_depth = max_depth
         self.min_points_per_leaf = min_points_per_leaf
         self.closest_k_points = closest_k_points
         self.number_thresholds = number_thresholds
-        self.closer_DBSCAN_point = closer_DBSCAN_point
-        self.eps_DBSCAN = eps_DBSCAN
+        self.dist_threshold = dist_threshold
+        # self.closer_DBSCAN_point = closer_DBSCAN_point
+        # self.eps_DBSCAN = eps_DBSCAN
         self.ordinal_categories = ordinal_categories
 
     def partial_fit(self, node, data, labels=None):
@@ -60,14 +62,14 @@ class DecisionTree:
 
     def build_tree(self, node, data, labels, depth):
 
-        # node = TreeNode(data, labels, depth=depth, max_depth=self.max_depth)
-        # Controllare self min points
-
 
         if depth >= self.max_depth: # or len(data) <= self.min_points_per_leaf:
             return node.update_data(data, labels)
 
         labels_values = np.unique(node.labels)
+
+        # Calculate the centroid of the current node
+        original_centroids = self.find_centroid(node)
 
         node_app = deepcopy(node)
         node_app.update_data(data, labels)
@@ -89,11 +91,41 @@ class DecisionTree:
                     print('--> Splitting')
                     return node
                 else:
-                    return node_app
+                    node = self.check_distance_from_centroids(data, labels, node, node_app, original_centroids)
+
+                    node.left = None
+                    node.right = None
+
+                    # return node_app
+                    return node
             else:
-                return node_app
+                node = self.check_distance_from_centroids(data, labels, node, node_app, original_centroids)
+
+                # return node_app
+                return node
         else:
-            return node_app
+
+            node = self.check_distance_from_centroids(data, labels, node, node_app, original_centroids)
+
+            # return node_app
+            return node
+
+    def check_distance_from_centroids(self, data, labels, node, node_app, original_centroids):
+        update_centroids = self.find_centroid(node_app)
+
+        unique_labels_batch = np.unique(labels)
+        unique_labels_node = np.unique(node.labels)
+        unique_labels = np.unique(np.concatenate([unique_labels_batch, unique_labels_node]))
+
+        for label in unique_labels:
+            dist = np.linalg.norm(update_centroids[update_centroids['Label']==label] - original_centroids[original_centroids['Label']==label])
+            if dist > self.dist_threshold or np.isnan(dist):
+                all_data = pd.concat([data, labels], axis=1)
+                all_data = all_data[all_data['Label'] == label]
+                lab = all_data['Label']
+                node.update_data(all_data.iloc[:, :-1], lab)
+
+        return node
 
     def find_best_split(self, data, labels):
         n_thresholds = self.number_thresholds + 1
@@ -121,10 +153,8 @@ class DecisionTree:
 
         if results_features == {}:
             return None
-        # Tupla
-        print('Pareto Ottimaly calculation...')
+
         best_split = self.compute_pareto_optimality(results_features)
-        print('Best Split: ', best_split)
         return best_split
 
     def apply_split(self, data, feature, threshold, labels = None):
@@ -263,23 +293,23 @@ class DecisionTree:
             return False
 
 
-    def detect_anomalies(self, node, data):
-        if node.is_leaf():
-            # self.visualize_plot(node, data)
-            centroids = self.find_centroid(node)
-            closest_class = self.find_closer_class(node, centroids, data)
-            # perc_closes = self.compute_closest_class_perc(node, closest_class, data)
-            perc_overlapping = self.compute_DBSCAN(node, closest_class, data)
-            # TODO: Check if anomaly
-            data['lof'] = perc_overlapping['lof']
-            # print("Anomaly Value: ", perc_overlapping)
-            return data
-            # TODO: Check if anomaly
-        else:
-            left_data, right_data = self.apply_split(data, node.split_feature, node.split_threshold)
-            left_data = self.detect_anomalies(node.left, left_data)
-            right_data = self.detect_anomalies(node.right, right_data)
-            return pd.concat([left_data, right_data], axis=0)
+    # def detect_anomalies(self, node, data):
+    #     if node.is_leaf():
+    #         # self.visualize_plot(node, data)
+    #         centroids = self.find_centroid(node)
+    #         closest_class = self.find_closer_class(node, centroids, data)
+    #         # perc_closes = self.compute_closest_class_perc(node, closest_class, data)
+    #         perc_overlapping = self.compute_DBSCAN(node, closest_class, data)
+    #         # TODO: Check if anomaly
+    #         data['lof'] = perc_overlapping['lof']
+    #         # print("Anomaly Value: ", perc_overlapping)
+    #         return data
+    #         # TODO: Check if anomaly
+    #     else:
+    #         left_data, right_data = self.apply_split(data, node.split_feature, node.split_threshold)
+    #         left_data = self.detect_anomalies(node.left, left_data)
+    #         right_data = self.detect_anomalies(node.right, right_data)
+    #         return pd.concat([left_data, right_data], axis=0)
 
 
     def detect_anomalies_with_mad(self, node, data, label_test, T_mad=3.5):
@@ -320,67 +350,67 @@ class DecisionTree:
     #TODO: Controllare perché il primo valore del dataframe ritorna 2 volte
     #TODO: Fare in modo che quando arrivano nella funzione anomaly score al posto di perc ci sia il valore di anomalia calcoalto da LOF
 
-    def compute_DBSCAN(self, node,closest_class, data):
-        class_dfs = []
-        data_node = node.data.copy(deep=True)
-        data_node['Label'] = node.labels
-        data_node = data_node[data_node['Label'] == closest_class]
-        data_label = data
-        data_label['Label'] = closest_class
-        df_combined = pd.concat([data_node, data_label], axis=0)
-        X = df_combined.drop(columns=['Label']).values
-        # Normalizza X
-        # Ad un certo punto da errore sul MinMaxScaler: Input X contains infinity or a value too large for dtype('float64').
-        scaler = MinMaxScaler()
-        X = scaler.fit_transform(X)
-        # Parametri di DBSCAN
-        min_samples = int(len(df_combined)*self.closer_DBSCAN_point)  # numero minimo di punti per formare un cluster
-        # Applica DBSCAN
-        if min_samples == 0:
-            min_samples = 2
-        dbscan = DBSCAN(eps=self.eps_DBSCAN, min_samples=min_samples)
-        dbscan.fit(X)
-        # Etichette di cluster generate da DBSCAN
-        labels = dbscan.labels_
-        if np.all(labels == -1):
-            print('Troppo Rumoroso')
-            labels = np.zeros_like(labels)
-        # Aggiungi le etichette di cluster al DataFrame combinato
-        df_combined['cluster'] = labels
-        # Visualizza i risultati
-        combine_new = df_combined[len(data_node):]
-        if not np.all(combine_new['cluster'].values == 0):
-            print('Rumoroso')
-            different_cluster = combine_new[combine_new['cluster'] != 0]
-            combine_new = combine_new[combine_new['cluster'] == 0]
-            combine_new.drop(['cluster','Label'], axis=1, inplace=True)
-            # Create a dictionary to hold DataFrames for each class in 'different_cluster'
-            class_dfs = [different_cluster[different_cluster['cluster'] == cls] for cls in different_cluster['cluster'].unique()]
-            for df_different in class_dfs:
-                df_different.drop('cluster', axis=1, inplace=True)
-                centroide = df_different.groupby('Label').mean().reset_index()
-                app_data = pd.concat([data_node, centroide], axis=0)
-                app_data.drop('Label', axis=1, inplace=True)
-                lof = LocalOutlierFactor(n_neighbors=min_samples)
-                lof.fit_predict(app_data)
-                df_different['lof'] = -lof.negative_outlier_factor_[-1] # dovrebbe essere quanto è effettivamente un anomalia, quindi quanto si discosta dal  
-            # Iterate over each DataFrame in the dictionary
-        if class_dfs != []:
-            if combine_new.shape[0] > 0:
-                results = self.detect_anomalies(node, combine_new)
-                if type(results) == list and len(results) > 0:
-                    print('CIAO')
-                class_dfs.append(results)
-            # class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs
-            class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs[0]
-            # class_dfs = pd.concat([class_dfs, df_different], axis=0)
-
-            # class_dfs = pd.concat([class_dfs, df_different], axis=0)
-            # df_combined = pd.concat(class_dfs, axis=0)
-        else:
-            combine_new['lof'] = 0
-            class_dfs = combine_new
-        return class_dfs
+    # def compute_DBSCAN(self, node,closest_class, data):
+    #     class_dfs = []
+    #     data_node = node.data.copy(deep=True)
+    #     data_node['Label'] = node.labels
+    #     data_node = data_node[data_node['Label'] == closest_class]
+    #     data_label = data
+    #     data_label['Label'] = closest_class
+    #     df_combined = pd.concat([data_node, data_label], axis=0)
+    #     X = df_combined.drop(columns=['Label']).values
+    #     # Normalizza X
+    #     # Ad un certo punto da errore sul MinMaxScaler: Input X contains infinity or a value too large for dtype('float64').
+    #     scaler = MinMaxScaler()
+    #     X = scaler.fit_transform(X)
+    #     # Parametri di DBSCAN
+    #     min_samples = int(len(df_combined)*self.closer_DBSCAN_point)  # numero minimo di punti per formare un cluster
+    #     # Applica DBSCAN
+    #     if min_samples == 0:
+    #         min_samples = 2
+    #     dbscan = DBSCAN(eps=self.eps_DBSCAN, min_samples=min_samples)
+    #     dbscan.fit(X)
+    #     # Etichette di cluster generate da DBSCAN
+    #     labels = dbscan.labels_
+    #     if np.all(labels == -1):
+    #         print('Troppo Rumoroso')
+    #         labels = np.zeros_like(labels)
+    #     # Aggiungi le etichette di cluster al DataFrame combinato
+    #     df_combined['cluster'] = labels
+    #     # Visualizza i risultati
+    #     combine_new = df_combined[len(data_node):]
+    #     if not np.all(combine_new['cluster'].values == 0):
+    #         print('Rumoroso')
+    #         different_cluster = combine_new[combine_new['cluster'] != 0]
+    #         combine_new = combine_new[combine_new['cluster'] == 0]
+    #         combine_new.drop(['cluster','Label'], axis=1, inplace=True)
+    #         # Create a dictionary to hold DataFrames for each class in 'different_cluster'
+    #         class_dfs = [different_cluster[different_cluster['cluster'] == cls] for cls in different_cluster['cluster'].unique()]
+    #         for df_different in class_dfs:
+    #             df_different.drop('cluster', axis=1, inplace=True)
+    #             centroide = df_different.groupby('Label').mean().reset_index()
+    #             app_data = pd.concat([data_node, centroide], axis=0)
+    #             app_data.drop('Label', axis=1, inplace=True)
+    #             lof = LocalOutlierFactor(n_neighbors=min_samples)
+    #             lof.fit_predict(app_data)
+    #             df_different['lof'] = -lof.negative_outlier_factor_[-1] # dovrebbe essere quanto è effettivamente un anomalia, quindi quanto si discosta dal
+    #         # Iterate over each DataFrame in the dictionary
+    #     if class_dfs != []:
+    #         if combine_new.shape[0] > 0:
+    #             results = self.detect_anomalies(node, combine_new)
+    #             if type(results) == list and len(results) > 0:
+    #                 print('CIAO')
+    #             class_dfs.append(results)
+    #         # class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs
+    #         class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs[0]
+    #         # class_dfs = pd.concat([class_dfs, df_different], axis=0)
+    #
+    #         # class_dfs = pd.concat([class_dfs, df_different], axis=0)
+    #         # df_combined = pd.concat(class_dfs, axis=0)
+    #     else:
+    #         combine_new['lof'] = 0
+    #         class_dfs = combine_new
+    #     return class_dfs
 
 
         '''num_negative_ones = (combine_new['cluster'] == -1).sum()
@@ -389,31 +419,31 @@ class DecisionTree:
         ratio = num_negative_ones / total_count'''
 
 
-    def compute_closest_class_perc(self, node, closest_class, data):
-        # Extract the data (features) and labels from the node
-        data_val = node.data  # DataFrame of N features
-        labels_val = node.labels  # Labels associated with the points in the DataFrame
-
-        # Convert the new point to a NumPy array if it's not already
-        new_point = np.array(data.mean())
-
-        # Calculate the Euclidean distances between the new point and all points in the data
-        distances = np.linalg.norm(data_val.values - new_point, axis=1)
-
-        k_points = int(len(distances) * self.closest_k_points)
-
-        # Get the indices of the k smallest distances
-        k_nearest_indices = np.argsort(distances)[:k_points]
-
-        # Retrieve the corresponding labels for the k nearest points
-        nearest_labels = labels_val[k_nearest_indices]
-
-        # Determine the most common label among the nearest labels
-        unique_labels, counts = np.unique(nearest_labels, return_counts=True)
-        # Count occurrences of each label in nearest_labels
-        label_counts = {label: count for label, count in zip(unique_labels, counts)}
-
-        return label_counts[closest_class] / k_points
+    # def compute_closest_class_perc(self, node, closest_class, data):
+    #     # Extract the data (features) and labels from the node
+    #     data_val = node.data  # DataFrame of N features
+    #     labels_val = node.labels  # Labels associated with the points in the DataFrame
+    #
+    #     # Convert the new point to a NumPy array if it's not already
+    #     new_point = np.array(data.mean())
+    #
+    #     # Calculate the Euclidean distances between the new point and all points in the data
+    #     distances = np.linalg.norm(data_val.values - new_point, axis=1)
+    #
+    #     k_points = int(len(distances) * self.closest_k_points)
+    #
+    #     # Get the indices of the k smallest distances
+    #     k_nearest_indices = np.argsort(distances)[:k_points]
+    #
+    #     # Retrieve the corresponding labels for the k nearest points
+    #     nearest_labels = labels_val[k_nearest_indices]
+    #
+    #     # Determine the most common label among the nearest labels
+    #     unique_labels, counts = np.unique(nearest_labels, return_counts=True)
+    #     # Count occurrences of each label in nearest_labels
+    #     label_counts = {label: count for label, count in zip(unique_labels, counts)}
+    #
+    #     return label_counts[closest_class] / k_points
 
 
     def find_centroid(self, node):
@@ -427,22 +457,22 @@ class DecisionTree:
         centroids = data_copy.groupby('Label').mean().reset_index()
         return centroids
 
-    def find_closer_class(self, node, centroids, data):
-        # Separate the 'Label' column and the centroid data (features)
-        labels = centroids['Label']
-        centroid_features = centroids.drop(columns=['Label'])
-
-        # Convert new_centroid to a NumPy array if it's a list or Pandas Series
-        new_centroid = np.array(data.mean())
-
-        # Compute the Euclidean distance between the new centroid and each existing centroid
-        distances = np.linalg.norm(centroid_features.values - new_centroid, axis=1)
-
-        # Find the index of the closest centroid
-        closest_index = np.argmin(distances)
-
-        # Return the label of the closest centroid
-        return labels.iloc[closest_index]
+    # def find_closer_class(self, node, centroids, data):
+    #     # Separate the 'Label' column and the centroid data (features)
+    #     labels = centroids['Label']
+    #     centroid_features = centroids.drop(columns=['Label'])
+    #
+    #     # Convert new_centroid to a NumPy array if it's a list or Pandas Series
+    #     new_centroid = np.array(data.mean())
+    #
+    #     # Compute the Euclidean distance between the new centroid and each existing centroid
+    #     distances = np.linalg.norm(centroid_features.values - new_centroid, axis=1)
+    #
+    #     # Find the index of the closest centroid
+    #     closest_index = np.argmin(distances)
+    #
+    #     # Return the label of the closest centroid
+    #     return labels.iloc[closest_index]
 
     def visualize_plot(self, node, data):
         import pandas as pd
