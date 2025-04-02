@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import time
@@ -16,6 +17,10 @@ from util import get_metrics, save_metrics
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
+def save_parameters(args, dir_path):
+    with open(os.path.join(dir_path, 'config.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
 def get_args():
     args = ArgumentParser()
     args.add_argument('--dataset', type=str, default='CICIDS2017')
@@ -23,6 +28,7 @@ def get_args():
     args.add_argument('--mode', type=str, default='')
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--dist_threshold', type=float, default=0.25)
+    args.add_argument('--homogeneity_gain_threshold', type=float, default=0.1)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--closest_k_points', type=float, default=0.1)
     args.add_argument('--number_thresholds', type=int, default=2)
@@ -36,8 +42,17 @@ if __name__=='__main__':
     df_train, df_test, cat = preprocess(df_train, df_test)
     dir_path = f'results/B{args.batch_size}/{args.mode}/{args.dataset}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
     os.makedirs(dir_path, exist_ok=True)
+    save_parameters(args, dir_path)
 
-    tree = DecisionTree(max_depth=args.max_depth, min_points_per_leaf=args.min_points_per_leaf, dist_threshold=args.dist_threshold, closest_k_points=0.1, closer_DBSCAN_point=0.1, eps_DBSCAN=0.1, number_thresholds=2, ordinal_categories=cat['ordinal_categories'])
+    tree = DecisionTree(
+        max_depth=args.max_depth,
+        min_points_per_leaf=args.min_points_per_leaf,
+        dist_threshold=args.dist_threshold,
+        homogeneity_gain_threshold=args.homogeneity_gain_threshold,
+        closest_k_points=args.closest_k_points,
+        number_thresholds=args.number_thresholds,
+        ordinal_categories=cat['ordinal_categories']
+    )
 
     total_time = time.time()
 

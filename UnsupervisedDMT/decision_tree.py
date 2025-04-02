@@ -1,34 +1,27 @@
 import oapackage
 import random
-
 import pandas as pd
-from pyparsing import original_text_for
-from sklearn.neighbors import LocalOutlierFactor
-from tqdm import tqdm
 
 from UnsupervisedDMT.TreeNode import TreeNode
 import numpy as np
 from copy import deepcopy
 from sklearn.cluster import KMeans
 import util
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import MinMaxScaler
 # TODO: RISOLVERE QUANDO NON CI SONO DATI DA METTERE NELLE FOGLIE!!!!
 # TODO: CONTROLLARE PERCHé AUMENTANO DI 2 ALLA VOLTA LA PROFONDITA
 # Per risolverlo bisognerebbe assegnare un minimo di quante foglie devono esserci ogni volta che splitto i dati
 # Se per esempio non ci sono abbastanza dati, allora non posso farne il split
 
-# Classe Albero Decisionale
+
 class DecisionTree:
-    def __init__(self, max_depth=5, min_points_per_leaf=20, closest_k_points=0.5, number_thresholds=3, dist_threshold=0.5, closer_DBSCAN_point=0.1, eps_DBSCAN=0.9, ordinal_categories=[]):
+    def __init__(self, max_depth=5, min_points_per_leaf=20, closest_k_points=0.5, number_thresholds=3, dist_threshold=0.5, homogeneity_gain_threshold=0, ordinal_categories=[]):
         self.max_depth = max_depth
         self.min_points_per_leaf = min_points_per_leaf
         self.closest_k_points = closest_k_points
         self.number_thresholds = number_thresholds
         self.dist_threshold = dist_threshold
-        # self.closer_DBSCAN_point = closer_DBSCAN_point
-        # self.eps_DBSCAN = eps_DBSCAN
         self.ordinal_categories = ordinal_categories
+        self.homogeneity_gain_threshold = homogeneity_gain_threshold
 
     def partial_fit(self, node, data, labels=None):
         if node is None:
@@ -96,18 +89,14 @@ class DecisionTree:
                     node.left = None
                     node.right = None
 
-                    # return node_app
                     return node
             else:
                 node = self.check_distance_from_centroids(data, labels, node, node_app, original_centroids)
 
-                # return node_app
                 return node
         else:
-
             node = self.check_distance_from_centroids(data, labels, node, node_app, original_centroids)
 
-            # return node_app
             return node
 
     def check_distance_from_centroids(self, data, labels, node, node_app, original_centroids):
@@ -287,7 +276,7 @@ class DecisionTree:
         homogeneity_gain = self.homogeneity_gain(node_parent, node_left, node_right)
         # silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
         # if homogeneity_gain > 0 and silhouette_gain > 0:
-        if homogeneity_gain > 0:
+        if homogeneity_gain > self.homogeneity_gain_threshold:
             return True
         else:
             return False
