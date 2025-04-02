@@ -18,7 +18,9 @@ import pickle
 num_classes = {
     "CICIDS2017": 2,
     "IDS2018": 2,
-    "Kitsune": 2
+    "Kitsune": 2,
+    "rKitsune": 2,
+    "mKitsune": 2
 }
 
 def get_args():
@@ -97,21 +99,23 @@ class DMTRunner:
             preds = np.append(preds, y_pred)
             targets = np.append(targets, y.astype(np.int32))
 
-            self.model.partial_fit(x, y) #DMT trains online
+            # self.model.partial_fit(x, y) #DMT trains online
 
             if verbose:
                 if iteration != 0 and iteration % 50 == 0:
                     print(f"Reached iteration {iteration}")
                 iteration += 1
 
-        print("Testing finished.")
+        print("Testing finished. Saving the model...")
+        self.save_model(name="tree_test.pkl")
+        print("Model saved.")
 
         df = pd.DataFrame({"Label": targets, "Predicted": preds})
 
         return df
 
-    def save_model(self):
-        with open(f'{self.dir_path}/tree.pkl', 'wb') as f:
+    def save_model(self, name="tree_train.pkl"):
+        with open(f'{self.dir_path}/{name}', 'wb') as f:
             pickle.dump(self.model, f)
 
 
