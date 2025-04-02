@@ -13,3 +13,6 @@ The name of the dataset files should be as follows:
 - CICIDS: `./datasets/CICIDS2017_prova.csv`
 - IDS18: `./datasets/IDS2018`
 - Kitsune, rKitsune, mKitsune: `./datasets/Kitsune`'
+
+To use **DMT**, install each requirement separately due to the scikit-multiflow package.
+DMT requires python 3.10.12
