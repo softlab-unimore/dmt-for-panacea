@@ -313,13 +313,20 @@ class DecisionTree:
 
             min_A_inst = np.min(A_inst, axis=1)
 
+            mask_drift = min_A_inst > T_mad
             num_drift = (min_A_inst > T_mad).sum()
-            print(num_drift, ' Drift detected')
 
             pred = centroids.iloc[np.argmin(dists, axis=1), 0].reset_index(drop=True)
             pred.index = label_test.index
 
             results = pd.DataFrame({'Label': label_test, 'Predicted': pred})
+
+            if num_drift > 0:
+                if len(centroids) == 1:
+                    pred[mask_drift] = pred[mask_drift].map(lambda x: 1 if x == 0 else 0 if x == 1 else x)
+
+                _ = self.build_tree(node, data, pred, depth=node.depth + 1)
+
             return results
         else:
             left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)

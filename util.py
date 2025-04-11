@@ -107,6 +107,6 @@ def get_metrics(results, test_time, total_time) -> dict:
 
     return metrics
 
-def save_metrics(metrics: dict, dir_path: str):
-    with open(f'{dir_path}/metrics.json', 'w') as f:
+def save_metrics(metrics: dict, dir_path: str, conf: str = ''):
+    with open(f'{dir_path}/metrics{"_" + conf}.json', 'w') as f:
         json.dump(metrics, f, indent=4)

@@ -5,6 +5,9 @@ import time
 from datetime import datetime
 
 from argparse import ArgumentParser
+
+import pandas as pd
+
 from UnsupervisedDMT.decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
@@ -23,12 +26,13 @@ def save_parameters(args, dir_path):
 
 def get_args():
     args = ArgumentParser()
-    args.add_argument('--dataset', type=str, default='CICIDS2017')
+    args.add_argument('--dataset', type=str, default='Kitsune')
     args.add_argument('--batch_size', type=int, default=1024)
     args.add_argument('--mode', type=str, default='')
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--dist_threshold', type=float, default=0.25)
-    args.add_argument('--homogeneity_gain_threshold', type=float, default=0.1)
+    args.add_argument('--homogeneity_gain_threshold', type=float, default=0)
+    args.add_argument('--tmad', type=float, default=3.5)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--closest_k_points', type=float, default=0.1)
     args.add_argument('--number_thresholds', type=int, default=2)
@@ -79,12 +83,23 @@ if __name__=='__main__':
     print('Start Test')
     print('------------------------------------')
 
-    data_test, labels_test = df_test.iloc[:, :-1].copy(deep=True), df_test.loc[:, 'Label'].copy(deep=True)
-
     test_time = time.time()
-    # get_anomalies = tree.detect_anomalies(root, data_test)
-    results = tree.detect_anomalies_with_mad(root, data_test, labels_test)
-    results.to_csv(f'{dir_path}/results_{args.dataset}.csv', index=False)
+
+    if df_test.shape[0] % args.batch_size != 0:
+        df_test = df_test.iloc[:-(df_test.shape[0] % args.batch_size)]
+
+    results = pd.DataFrame(columns=['Label', 'Predicted'])
+    for i in range(0, df_test.shape[0], args.batch_size):
+        print(f'Batch {i} / {df_test.shape[0]}')
+        data_test, labels_test = df_test.iloc[:, :-1][i:i + args.batch_size], df_test['Label'][i:i + args.batch_size]
+        batch_results = tree.detect_anomalies_with_mad(root, data_test, labels_test, T_mad=args.tmad)
+        results = pd.concat([results, batch_results], axis=0)
+
+        if i % 40 == 0:
+            batch_time = time.time() - test_time
+            metrics = get_metrics(results, batch_time, total_time)
+
+    results.to_csv(f'{dir_path}/results_{args.dataset}_batch.csv', index=False)
     test_time = time.time() - test_time
 
     metrics = get_metrics(results, test_time, total_time)
