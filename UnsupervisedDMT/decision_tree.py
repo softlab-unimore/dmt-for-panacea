@@ -1,16 +1,14 @@
 import oapackage
 import random
 import pandas as pd
+from matplotlib import pyplot as plt
+from sklearn.manifold import TSNE
 
 from UnsupervisedDMT.TreeNode import TreeNode
 import numpy as np
 from copy import deepcopy
 from sklearn.cluster import KMeans
 import util
-# TODO: RISOLVERE QUANDO NON CI SONO DATI DA METTERE NELLE FOGLIE!!!!
-# TODO: CONTROLLARE PERCHé AUMENTANO DI 2 ALLA VOLTA LA PROFONDITA
-# Per risolverlo bisognerebbe assegnare un minimo di quante foglie devono esserci ogni volta che splitto i dati
-# Se per esempio non ci sono abbastanza dati, allora non posso farne il split
 
 
 class DecisionTree:
@@ -282,25 +280,6 @@ class DecisionTree:
             return False
 
 
-    # def detect_anomalies(self, node, data):
-    #     if node.is_leaf():
-    #         # self.visualize_plot(node, data)
-    #         centroids = self.find_centroid(node)
-    #         closest_class = self.find_closer_class(node, centroids, data)
-    #         # perc_closes = self.compute_closest_class_perc(node, closest_class, data)
-    #         perc_overlapping = self.compute_DBSCAN(node, closest_class, data)
-    #         # TODO: Check if anomaly
-    #         data['lof'] = perc_overlapping['lof']
-    #         # print("Anomaly Value: ", perc_overlapping)
-    #         return data
-    #         # TODO: Check if anomaly
-    #     else:
-    #         left_data, right_data = self.apply_split(data, node.split_feature, node.split_threshold)
-    #         left_data = self.detect_anomalies(node.left, left_data)
-    #         right_data = self.detect_anomalies(node.right, right_data)
-    #         return pd.concat([left_data, right_data], axis=0)
-
-
     def detect_anomalies_with_mad(self, node, data, label_test, T_mad=3.5):
         if node.is_leaf():
             centroids = self.find_centroid(node)
@@ -319,6 +298,8 @@ class DecisionTree:
             pred = centroids.iloc[np.argmin(dists, axis=1), 0].reset_index(drop=True)
             pred.index = label_test.index
 
+            # self.plots_clusters(np.concatenate([node.data, data], axis=0), np.concatenate([node.labels, pred], axis=0), len(pred))
+
             results = pd.DataFrame({'Label': label_test, 'Predicted': pred})
 
             if num_drift > 0:
@@ -330,8 +311,119 @@ class DecisionTree:
             return results
         else:
             left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)
-            left_data = self.detect_anomalies_with_mad(node.left, left_data, left_labels)
-            right_data = self.detect_anomalies_with_mad(node.right, right_data, right_labels)
+
+            if len(left_data) != 0:
+                left_data = self.detect_anomalies_with_mad(node.left, left_data, left_labels)
+            if len(right_data) != 0:
+                right_data = self.detect_anomalies_with_mad(node.right, right_data, right_labels)
+
+            return pd.concat([left_data, right_data], axis=0)
+
+    def detect_anomalies_with_mean(self, node, data, label_test, T_mad=3.5):
+        if node.is_leaf():
+            centroids = self.find_centroid(node)
+
+            data_np = data.to_numpy()
+            centroids_np = centroids.iloc[:, 1:].values
+            dists = np.linalg.norm(data_np[:, np.newaxis, :] - centroids_np[np.newaxis, :, :], axis=2)
+
+            data_node = node.data.to_numpy()
+            distances = {}
+            for label in [0, 1]:
+                cluster_points = data_node[node.labels == label]
+                if len(cluster_points) == 0:
+                    distances[label] = np.nan
+                    continue
+                centroid = centroids[centroids['Label']==label].values
+                mean_dists = np.linalg.norm(cluster_points - centroid[:, 1:], axis=1)
+                distances[label] = np.mean(mean_dists)
+
+            scores = dists / np.array([distances[c] for c in distances])
+            centroids = centroids.sort_values(by=centroids.columns[0])
+            pred = centroids.iloc[np.nanargmin(scores, axis=1), 0].reset_index(drop=True)
+            scores = np.concatenate((scores, pred.to_numpy().reshape(-1, 1)), axis=1)
+            pred.index = label_test.index
+
+            selected_item = np.where(scores[:, -1] == 0, scores[:, 0], scores[:, 1])
+            mask = selected_item > 2.0
+            pred[mask] = 1
+
+            # self.plots_clusters(np.concatenate([node.data, data], axis=0), np.concatenate([node.labels, pred], axis=0), len(pred))
+
+            results = pd.DataFrame({'Label': label_test, 'Predicted': pred})
+
+            # if num_drift > 0:
+            #     if len(centroids) == 1:
+            #         pred[mask_drift] = pred[mask_drift].map(lambda x: 1 if x == 0 else 0 if x == 1 else x)
+            #
+            #     _ = self.build_tree(node, data, pred, depth=node.depth + 1)
+
+            return results
+        else:
+            left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)
+
+            if len(left_data) != 0:
+                left_data = self.detect_anomalies_with_mean(node.left, left_data, left_labels)
+            if len(right_data) != 0:
+                right_data = self.detect_anomalies_with_mean(node.right, right_data, right_labels)
+
+            return pd.concat([left_data, right_data], axis=0)
+
+    def detect_anomalies_with_adaptive_clusters(self, node, data, label_test):
+        if node.is_leaf():
+
+            list_kmeans = []
+            distorsions = []
+
+            for k in range(1, 7):
+                kmeans = KMeans(n_clusters=k, random_state=42)
+                kmeans.fit(node.data)
+                list_kmeans.append(kmeans)
+                distorsions.append(kmeans.inertia_)
+
+            # Compute the first derivative of the distortion
+            first_derivative = np.diff(distorsions)
+            optimal_k = np.argmin(first_derivative) + 2
+            # Find the best Kmeans
+            try:
+                kmeans = list_kmeans[optimal_k]
+            except IndexError:
+                kmeans = list_kmeans[-1]
+
+            kmeans_labels = kmeans.labels_
+            centroids = kmeans.cluster_centers_
+            labels = pd.DataFrame({'Kmeans': kmeans_labels, 'Label': node.labels})
+            cluster_labels = labels.groupby('Kmeans')['Label'].agg(lambda x: x.mode()[0])
+
+            distances = {}
+            for label in cluster_labels.index:
+                cluster_points = node.data.reset_index(drop=True)[labels['Kmeans'].reset_index(drop=True) == label]
+                if len(cluster_points) == 0:
+                    distances[label] = np.nan
+                    continue
+                mean_dists = np.linalg.norm(cluster_points - centroids[label, :], axis=1)
+                distances[label] = np.mean(mean_dists)
+
+            data_np = data.to_numpy()
+            dists = np.linalg.norm(data_np[:, np.newaxis, :] - centroids[np.newaxis, :, :], axis=2)
+
+            scores = dists / np.array([distances[c] for c in distances])
+            pred_cluster = np.nanargmin(scores, axis=1)
+            pred = cluster_labels[pred_cluster].reset_index(drop=True)
+
+            # self.plots_clusters(np.concatenate([node.data, data], axis=0), np.concatenate([node.labels, pred], axis=0), len(pred))
+
+            results = pd.DataFrame({'Label': label_test.reset_index(drop=True), 'Predicted': pred})
+
+            return results
+        else:
+            left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)
+
+            if len(left_data) != 0:
+                left_data = self.detect_anomalies_with_adaptive_clusters(node.left, left_data, left_labels)
+            if len(right_data) != 0:
+                right_data = self.detect_anomalies_with_adaptive_clusters(node.right, right_data, right_labels)
+
             return pd.concat([left_data, right_data], axis=0)
 
 
@@ -343,103 +435,43 @@ class DecisionTree:
         MAD = b * pd.Series(np.abs(dists - median_d_i[labels].to_numpy())).groupby(labels).median()
         return median_d_i.to_numpy(), MAD.to_numpy()
 
-    #TODO: Controllare perché il primo valore del dataframe ritorna 2 volte
-    #TODO: Fare in modo che quando arrivano nella funzione anomaly score al posto di perc ci sia il valore di anomalia calcoalto da LOF
 
-    # def compute_DBSCAN(self, node,closest_class, data):
-    #     class_dfs = []
-    #     data_node = node.data.copy(deep=True)
-    #     data_node['Label'] = node.labels
-    #     data_node = data_node[data_node['Label'] == closest_class]
-    #     data_label = data
-    #     data_label['Label'] = closest_class
-    #     df_combined = pd.concat([data_node, data_label], axis=0)
-    #     X = df_combined.drop(columns=['Label']).values
-    #     # Normalizza X
-    #     # Ad un certo punto da errore sul MinMaxScaler: Input X contains infinity or a value too large for dtype('float64').
-    #     scaler = MinMaxScaler()
-    #     X = scaler.fit_transform(X)
-    #     # Parametri di DBSCAN
-    #     min_samples = int(len(df_combined)*self.closer_DBSCAN_point)  # numero minimo di punti per formare un cluster
-    #     # Applica DBSCAN
-    #     if min_samples == 0:
-    #         min_samples = 2
-    #     dbscan = DBSCAN(eps=self.eps_DBSCAN, min_samples=min_samples)
-    #     dbscan.fit(X)
-    #     # Etichette di cluster generate da DBSCAN
-    #     labels = dbscan.labels_
-    #     if np.all(labels == -1):
-    #         print('Troppo Rumoroso')
-    #         labels = np.zeros_like(labels)
-    #     # Aggiungi le etichette di cluster al DataFrame combinato
-    #     df_combined['cluster'] = labels
-    #     # Visualizza i risultati
-    #     combine_new = df_combined[len(data_node):]
-    #     if not np.all(combine_new['cluster'].values == 0):
-    #         print('Rumoroso')
-    #         different_cluster = combine_new[combine_new['cluster'] != 0]
-    #         combine_new = combine_new[combine_new['cluster'] == 0]
-    #         combine_new.drop(['cluster','Label'], axis=1, inplace=True)
-    #         # Create a dictionary to hold DataFrames for each class in 'different_cluster'
-    #         class_dfs = [different_cluster[different_cluster['cluster'] == cls] for cls in different_cluster['cluster'].unique()]
-    #         for df_different in class_dfs:
-    #             df_different.drop('cluster', axis=1, inplace=True)
-    #             centroide = df_different.groupby('Label').mean().reset_index()
-    #             app_data = pd.concat([data_node, centroide], axis=0)
-    #             app_data.drop('Label', axis=1, inplace=True)
-    #             lof = LocalOutlierFactor(n_neighbors=min_samples)
-    #             lof.fit_predict(app_data)
-    #             df_different['lof'] = -lof.negative_outlier_factor_[-1] # dovrebbe essere quanto è effettivamente un anomalia, quindi quanto si discosta dal
-    #         # Iterate over each DataFrame in the dictionary
-    #     if class_dfs != []:
-    #         if combine_new.shape[0] > 0:
-    #             results = self.detect_anomalies(node, combine_new)
-    #             if type(results) == list and len(results) > 0:
-    #                 print('CIAO')
-    #             class_dfs.append(results)
-    #         # class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs
-    #         class_dfs = pd.concat(class_dfs, axis=0) if class_dfs else class_dfs[0]
-    #         # class_dfs = pd.concat([class_dfs, df_different], axis=0)
-    #
-    #         # class_dfs = pd.concat([class_dfs, df_different], axis=0)
-    #         # df_combined = pd.concat(class_dfs, axis=0)
-    #     else:
-    #         combine_new['lof'] = 0
-    #         class_dfs = combine_new
-    #     return class_dfs
+    def plots_clusters(self, df, y, n_test):
+        tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+        X_2d = tsne.fit_transform(df)
+        y[-n_test:] = np.where(y[-n_test:] == 0, 3, 4)
 
+        plt.figure(figsize=(8, 6))
 
-        '''num_negative_ones = (combine_new['cluster'] == -1).sum()
-        num_negative_ones = num_negative_ones + (combine_new['cluster'] == 1).sum()
-        total_count = len(combine_new['cluster'])
-        ratio = num_negative_ones / total_count'''
+        # Classe 0
+        plt.scatter(
+            X_2d[y == 0, 0], X_2d[y == 0, 1],
+            c='dodgerblue', label='Benign', alpha=0.7, edgecolors='k'
+        )
 
+        # Classe 1
+        plt.scatter(
+            X_2d[y == 1, 0], X_2d[y == 1, 1],
+            c='crimson', label='Attack - Node', alpha=0.7, edgecolors='k'
+        )
 
-    # def compute_closest_class_perc(self, node, closest_class, data):
-    #     # Extract the data (features) and labels from the node
-    #     data_val = node.data  # DataFrame of N features
-    #     labels_val = node.labels  # Labels associated with the points in the DataFrame
-    #
-    #     # Convert the new point to a NumPy array if it's not already
-    #     new_point = np.array(data.mean())
-    #
-    #     # Calculate the Euclidean distances between the new point and all points in the data
-    #     distances = np.linalg.norm(data_val.values - new_point, axis=1)
-    #
-    #     k_points = int(len(distances) * self.closest_k_points)
-    #
-    #     # Get the indices of the k smallest distances
-    #     k_nearest_indices = np.argsort(distances)[:k_points]
-    #
-    #     # Retrieve the corresponding labels for the k nearest points
-    #     nearest_labels = labels_val[k_nearest_indices]
-    #
-    #     # Determine the most common label among the nearest labels
-    #     unique_labels, counts = np.unique(nearest_labels, return_counts=True)
-    #     # Count occurrences of each label in nearest_labels
-    #     label_counts = {label: count for label, count in zip(unique_labels, counts)}
-    #
-    #     return label_counts[closest_class] / k_points
+        # Classe test
+        plt.scatter(
+            X_2d[y == 3, 0], X_2d[y == 3, 1],
+            c='green', label='test benign', alpha=0.7, edgecolors='k',
+        )
+
+        plt.scatter(
+            X_2d[y == 4, 0], X_2d[y == 4, 1],
+            c='orange', label='Attack', alpha=0.7, edgecolors='k',
+        )
+
+        plt.xlabel("t-SNE dimension 1")
+        plt.ylabel("t-SNE dimension 2")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
 
     def find_centroid(self, node):
@@ -453,22 +485,6 @@ class DecisionTree:
         centroids = data_copy.groupby('Label').mean().reset_index()
         return centroids
 
-    # def find_closer_class(self, node, centroids, data):
-    #     # Separate the 'Label' column and the centroid data (features)
-    #     labels = centroids['Label']
-    #     centroid_features = centroids.drop(columns=['Label'])
-    #
-    #     # Convert new_centroid to a NumPy array if it's a list or Pandas Series
-    #     new_centroid = np.array(data.mean())
-    #
-    #     # Compute the Euclidean distance between the new centroid and each existing centroid
-    #     distances = np.linalg.norm(centroid_features.values - new_centroid, axis=1)
-    #
-    #     # Find the index of the closest centroid
-    #     closest_index = np.argmin(distances)
-    #
-    #     # Return the label of the closest centroid
-    #     return labels.iloc[closest_index]
 
     def visualize_plot(self, node, data):
         import pandas as pd
