@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import math
 from collections import Counter
@@ -106,6 +108,10 @@ def get_metrics(results, test_time, total_time) -> dict:
     print('------------------------------------')
 
     return metrics
+
+def save_parameters(args, dir_path):
+    with open(os.path.join(dir_path, 'config.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
 def save_metrics(metrics: dict, dir_path: str, conf: str = ''):
     with open(f'{dir_path}/metrics{"_" + conf if conf != "" else ""}.json', 'w') as f:

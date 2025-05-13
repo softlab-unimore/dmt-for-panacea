@@ -19,14 +19,11 @@ from pandas.errors import SettingWithCopyWarning
 from data_utils.load_dataset import get_dataset
 
 from data_utils.preprocessing import preprocess
-from util import get_metrics, save_metrics
+from util import get_metrics, save_metrics, save_parameters
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
-def save_parameters(args, dir_path):
-    with open(os.path.join(dir_path, 'config.json'), 'w') as f:
-        json.dump(vars(args), f, indent=4)
 
 def get_args():
     args = ArgumentParser()
