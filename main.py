@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 
 from UnsupervisedDMT.decision_tree import DecisionTree
@@ -25,6 +26,51 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
 
+def find_best_kmeans(data_train):
+    list_kmeans = []
+    distorsions = []
+
+    for k in range(1, 7):
+        kmeans = KMeans(n_clusters=k, random_state=42)
+        kmeans.fit(data_train)
+        list_kmeans.append(kmeans)
+        distorsions.append(kmeans.inertia_)
+
+    first_derivative = np.diff(distorsions)
+    optimal_k = np.argmin(first_derivative) + 2
+
+    try:
+        kmeans = list_kmeans[optimal_k]
+    except IndexError:
+        kmeans = list_kmeans[-1]
+
+    return kmeans
+
+
+def find_data_sampled(data_train, labels_train, kmeans, sampling_perc):
+    data_train_sampled_list = []
+    labels_train_sampled_list = []
+
+    for i in np.unique(kmeans.labels_):
+        data_cluster = data_train[kmeans.labels_ == i]
+        labels_cluster = labels_train[kmeans.labels_ == i]
+
+        mask = np.random.rand(len(data_cluster)) < sampling_perc
+
+        data_sample = data_cluster[mask]
+        labels_sample = labels_cluster[mask]
+
+        if not data_sample.empty:
+            data_train_sampled_list.append(data_sample)
+        if not labels_sample.empty:
+            labels_train_sampled_list.append(labels_sample)
+
+    data_train_sampled = pd.concat(data_train_sampled_list, axis=0) if data_train_sampled_list else pd.DataFrame(columns=data_train.columns)
+    labels_train_sampled = pd.concat(labels_train_sampled_list, axis=0) if labels_train_sampled_list else pd.Series(name=labels_train.name)
+
+    return data_train_sampled, labels_train_sampled
+
+
 def get_args():
     args = ArgumentParser()
     args.add_argument('--dataset', type=str, default='Kitsune')
@@ -38,7 +84,8 @@ def get_args():
     args.add_argument('--closest_k_points', type=float, default=0.1)
     args.add_argument('--number_thresholds', type=int, default=2)
     args.add_argument('--pca', action='store_true', default=False)
-    args.add_argument('--delay', action='store_true', default=False)
+    args.add_argument('--delay', type=int, default=10)
+    args.add_argument('--sampling', type=float, default=0.1)
     args = args.parse_args()
 
     return args
@@ -121,12 +168,16 @@ if __name__=='__main__':
             batch_time = time.time() - test_time
             metrics = get_metrics(results, batch_time, total_time)
 
-        if args.delay:
-            i = i - args.batch_size * 10
+        i = i - args.batch_size * args.delay
 
         if i >= 0:
             print('Update tree...')
             data_train, labels_train = df_test.iloc[:, :-1][i: i + args.batch_size], df_test['Label'][i: i + args.batch_size]
+
+            if args.sampling > 0:
+                kmeans = find_best_kmeans(data_train)
+                data_train, labels_train = find_data_sampled(data_train, labels_train, kmeans, args.sampling)
+
             root = tree.partial_fit(root, data_train, labels_train)
 
     results.to_csv(f'{dir_path}/results_{args.dataset}_batch.csv', index=False)
