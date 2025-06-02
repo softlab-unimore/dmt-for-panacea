@@ -7,7 +7,6 @@ import math
 from tqdm import tqdm
 
 
-# Classe Nodo
 class TreeNode:
     def __init__(self, data=None, labels=None, depth=0, max_depth=None):
         self.data = data
