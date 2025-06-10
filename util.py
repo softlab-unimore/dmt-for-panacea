@@ -116,3 +116,8 @@ def save_parameters(args, dir_path):
 def save_metrics(metrics: dict, dir_path: str, conf: str = ''):
     with open(f'{dir_path}/metrics{"_" + conf if conf != "" else ""}.json', 'w') as f:
         json.dump(metrics, f, indent=4)
+
+def get_max_depth(node):
+    if node.is_leaf():
+        return 1
+    return 1 + max(get_max_depth(node.left), get_max_depth(node.right))
