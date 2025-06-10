@@ -25,6 +25,7 @@ from util import get_metrics, save_metrics, save_parameters
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=SettingWithCopyWarning)
 
+np.random.seed(42)
 
 def find_best_kmeans(data_train):
     list_kmeans = []
@@ -55,7 +56,7 @@ def find_data_sampled(data_train, labels_train, kmeans, sampling_perc):
         data_cluster = data_train[kmeans.labels_ == i]
         labels_cluster = labels_train[kmeans.labels_ == i]
 
-        mask = np.random.rand(len(data_cluster)) < sampling_perc
+        mask = np.random.choice(len(data_cluster), int(len(data_cluster) * sampling_perc), replace=False)
 
         data_sample = data_cluster[mask]
         labels_sample = labels_cluster[mask]
@@ -81,7 +82,6 @@ def get_args():
     args.add_argument('--homogeneity_gain_threshold', type=float, default=0)
     args.add_argument('--tmad', type=float, default=3.5)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
-    args.add_argument('--closest_k_points', type=float, default=0.1)
     args.add_argument('--number_thresholds', type=int, default=2)
     args.add_argument('--pca', action='store_true', default=False)
     args.add_argument('--delay', type=int, default=10)
@@ -120,7 +120,6 @@ if __name__=='__main__':
         min_points_per_leaf=args.min_points_per_leaf,
         dist_threshold=args.dist_threshold,
         homogeneity_gain_threshold=args.homogeneity_gain_threshold,
-        closest_k_points=args.closest_k_points,
         number_thresholds=args.number_thresholds,
         ordinal_categories=cat['ordinal_categories']
     )

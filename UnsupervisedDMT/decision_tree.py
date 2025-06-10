@@ -12,10 +12,9 @@ import util
 
 
 class DecisionTree:
-    def __init__(self, max_depth=5, min_points_per_leaf=20, closest_k_points=0.5, number_thresholds=3, dist_threshold=0.5, homogeneity_gain_threshold=0, ordinal_categories=[]):
+    def __init__(self, max_depth=5, min_points_per_leaf=20, number_thresholds=3, dist_threshold=0.5, homogeneity_gain_threshold=0, ordinal_categories=[]):
         self.max_depth = max_depth
         self.min_points_per_leaf = min_points_per_leaf
-        self.closest_k_points = closest_k_points
         self.number_thresholds = number_thresholds
         self.dist_threshold = dist_threshold
         self.ordinal_categories = ordinal_categories
@@ -32,8 +31,7 @@ class DecisionTree:
 
         else:
             node = self.build_tree(node, data, labels, depth=node.depth + 1)
-            # TODO: Compute Metrics
-            # TODO: Check Optimality
+
         return node
 
 
@@ -117,11 +115,9 @@ class DecisionTree:
     def find_best_split(self, data, labels):
         n_thresholds = self.number_thresholds + 1
         results_features = {}
-        # TODO: Implementare l'algoritmo di ricerca del miglior split
 
         print('--> Find best split')
         for feature in data.columns:
-            # TODO: Implementare l'algoritmo di splitting
             if feature in self.ordinal_categories:
                 thresholds = self.compute_thresholds(n_thresholds, data[feature], categorical=True)
             else:
@@ -268,12 +264,10 @@ class DecisionTree:
 
         return gain
 
-    # TODO: AL MOMENTO ANCHE SE C'è UN PICCOLO GAIN SPLITTA, DOVREMMO GESTIRE MEGLIO QUESTO
     def evaluate_split(self, node_parent, node_left, node_right):
         # entropy_gain = self.entropy_gain(node_parent, node_left, node_right)
         homogeneity_gain = self.homogeneity_gain(node_parent, node_left, node_right)
         # silhouette_gain = self.silhouette_gain(node_parent, node_left, node_right)
-        # if homogeneity_gain > 0 and silhouette_gain > 0:
         if homogeneity_gain > self.homogeneity_gain_threshold:
             return True
         else:
