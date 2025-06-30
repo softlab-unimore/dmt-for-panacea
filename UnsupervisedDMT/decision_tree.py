@@ -51,10 +51,6 @@ class DecisionTree:
 
     def build_tree(self, node, data, labels, depth):
 
-
-        if depth >= self.max_depth: # or len(data) <= self.min_points_per_leaf:
-            return node.update_data(data, labels)
-
         labels_values = np.unique(node.labels)
 
         # Calculate the centroid of the current node
@@ -63,8 +59,7 @@ class DecisionTree:
         node_app = deepcopy(node)
         node_app.update_data(data, labels)
 
-        # TODO: Find best split
-        if labels_values.size != 1 or not np.array_equal(labels_values, np.unique(labels)):
+        if (labels_values.size != 1 or not np.array_equal(labels_values, np.unique(labels))) and depth <= self.max_depth:
             best_split = self.find_best_split(node_app.data, node_app.labels)
             if best_split:
                 feature, threshold = best_split

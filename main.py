@@ -56,7 +56,7 @@ def find_data_sampled(data_train, labels_train, kmeans, sampling_perc):
         data_cluster = data_train[kmeans.labels_ == i]
         labels_cluster = labels_train[kmeans.labels_ == i]
 
-        mask = np.random.choice(len(data_cluster), int(len(data_cluster) * sampling_perc), replace=False)
+        mask = np.random.rand(len(data_cluster)) < sampling_perc
 
         data_sample = data_cluster[mask]
         labels_sample = labels_cluster[mask]
@@ -80,7 +80,6 @@ def get_args():
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--dist_threshold', type=float, default=0.25)
     args.add_argument('--homogeneity_gain_threshold', type=float, default=0)
-    args.add_argument('--tmad', type=float, default=3.5)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--number_thresholds', type=int, default=2)
     args.add_argument('--pca', action='store_true', default=False)
@@ -183,6 +182,6 @@ if __name__=='__main__':
     test_time = time.time() - test_time
 
     metrics = get_metrics(results, test_time, total_time)
-    save_metrics(metrics, dir_path, conf=f'tmad_{args.tmad}')
+    save_metrics(metrics, dir_path, conf=f'sampling{args.sampling}_delay{args.delay}')
 
     print('Finish')
