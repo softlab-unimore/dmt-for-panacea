@@ -8,11 +8,9 @@ from argparse import ArgumentParser
 
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
-from sklearn.manifold import TSNE
 
-from UnsupervisedDMT.decision_tree import DecisionTree
+from NOCTOWL.decision_tree import DecisionTree
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.decomposition import PCA
@@ -79,7 +77,7 @@ def get_args():
     args.add_argument('--mode', type=str, default='with_pca')
     args.add_argument('--max_depth', type=int, default=20)
     args.add_argument('--dist_threshold', type=float, default=0.25)
-    args.add_argument('--homogeneity_gain_threshold', type=float, default=0)
+    args.add_argument('--homogeneity_gain_threshold', type=float, default=0.1)
     args.add_argument('--min_points_per_leaf', type=int, default=20)
     args.add_argument('--number_thresholds', type=int, default=2)
     args.add_argument('--pca', action='store_true', default=False)
@@ -123,7 +121,7 @@ if __name__=='__main__':
         ordinal_categories=cat['ordinal_categories']
     )
 
-    total_time = time.time()
+    start_time = time.time()
 
     print('------------------------------------')
     print('Start Train')
@@ -157,14 +155,12 @@ if __name__=='__main__':
     for i in range(0, df_test.shape[0], args.batch_size):
         print(f'Batch {i} / {df_test.shape[0]}')
         data_test, labels_test = df_test.iloc[:, :-1][i:i + args.batch_size], df_test['Label'][i:i + args.batch_size]
-        # batch_results = tree.detect_anomalies_with_mad(root, data_test, labels_test, T_mad=args.tmad)
-        # batch_results = tree.detect_anomalies_with_mean(root, data_test, labels_test, T_mad=args.tmad)
         batch_results = tree.detect_anomalies_with_adaptive_clusters(root, data_test, labels_test)
         results = pd.concat([results, batch_results], axis=0)
 
         if i % 40 == 0:
             batch_time = time.time() - test_time
-            metrics = get_metrics(results, batch_time, total_time)
+            metrics = get_metrics(results, batch_time, time.time() - start_time)
 
         i = i - args.batch_size * args.delay
 
@@ -179,7 +175,7 @@ if __name__=='__main__':
             root = tree.partial_fit(root, data_train, labels_train)
 
     results.to_csv(f'{dir_path}/results_{args.dataset}_batch.csv', index=False)
-    test_time = time.time() - test_time
+    total_time = time.time() - start_time
 
     metrics = get_metrics(results, test_time, total_time)
     save_metrics(metrics, dir_path, conf=f'sampling{args.sampling}_delay{args.delay}')

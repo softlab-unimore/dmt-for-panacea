@@ -4,7 +4,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
 
-from UnsupervisedDMT.TreeNode import TreeNode
+from NOCTOWL.TreeNode import TreeNode
 import numpy as np
 from copy import deepcopy
 from sklearn.cluster import KMeans
@@ -132,8 +132,14 @@ class DecisionTree:
         if results_features == {}:
             return None
 
-        best_split = self.compute_pareto_optimality(results_features)
-        return best_split
+        best_split_key = max(results_features, key=lambda k: results_features[k][0])
+
+        # Estrai feature e threshold dalla chiave (come in compute_pareto_optimality)
+        value = best_split_key.split('___')
+        return (value[0], float(value[1]))
+
+        # best_split = self.compute_pareto_optimality(results_features)
+        # return best_split
 
     def apply_split(self, data, feature, threshold, labels = None):
         if feature in self.ordinal_categories:
@@ -231,7 +237,7 @@ class DecisionTree:
         return gain
 
     def homogeneity_gain(self, node_parent, node_left, node_right):
-        # y is the parent node, y_left and y_right are the child nodes
+        # y is the parent node, y_left and y_right are the chiGainld nodes
         parent_homogeneity = node_parent.metrics["homogeneity"]
         n = len(node_parent.data)
 
@@ -404,16 +410,23 @@ class DecisionTree:
 
             results = pd.DataFrame({'Label': label_test.reset_index(drop=True), 'Predicted': pred})
 
+            results = results.reset_index(drop=True)
+            data = data.reset_index(drop=True)
+            results = pd.concat([results, data], axis=1)
+
             return results
         else:
             left_data, right_data, left_labels, right_labels = self.apply_split(data, node.split_feature, node.split_threshold, labels=label_test)
 
-            if len(left_data) != 0:
-                left_data = self.detect_anomalies_with_adaptive_clusters(node.left, left_data, left_labels)
-            if len(right_data) != 0:
-                right_data = self.detect_anomalies_with_adaptive_clusters(node.right, right_data, right_labels)
+            left_res = pd.DataFrame(columns=['Label', 'Predicted'])
+            rigth_res = pd.DataFrame(columns=['Label', 'Predicted'])
 
-            return pd.concat([left_data, right_data], axis=0)
+            if len(left_data) != 0:
+                left_res = self.detect_anomalies_with_adaptive_clusters(node.left, left_data, left_labels)
+            if len(right_data) != 0:
+                rigth_res = self.detect_anomalies_with_adaptive_clusters(node.right, right_data, right_labels)
+
+            return pd.concat([left_res, rigth_res], axis=0)
 
 
     def compute_mad(self, node, centroids, b=1.4826):
@@ -473,43 +486,3 @@ class DecisionTree:
         # Group by the 'Label' column and calculate the mean for each group (centroid)
         centroids = data_copy.groupby('Label').mean().reset_index()
         return centroids
-
-
-    def visualize_plot(self, node, data):
-        import pandas as pd
-
-        # Assuming `result.data` is the DataFrame of labeled data from TreeNode
-        labeled_data = deepcopy(node.data)
-        data_copy = deepcopy(data)
-        # Create a copy of new_data to keep track of which data is labeled vs. unlabeled
-        data_copy['Label'] = 'Unlabeled'
-        labeled_data['Label'] = node.labels
-
-        # Combine both labeled and unlabeled data for visualization
-        combined_data = pd.concat([labeled_data, data_copy], ignore_index=True)
-
-        from sklearn.manifold import TSNE
-        import matplotlib.pyplot as plt
-
-        # Separate features from labels (remove 'Label' column temporarily)
-        features = combined_data.drop(columns=['Label'])
-
-        # Apply t-SNE to reduce data to 2 dimensions
-        tsne = TSNE(n_components=2, random_state=42, perplexity=1)
-        reduced_features = tsne.fit_transform(features)
-
-        # Add the t-SNE results back into the DataFrame
-        combined_data['TSNE1'] = reduced_features[:, 0]
-        combined_data['TSNE2'] = reduced_features[:, 1]
-
-        import seaborn as sns
-
-        # Plot using Seaborn, coloring by 'Label'
-        plt.figure(figsize=(10, 7))
-        sns.scatterplot(x='TSNE1', y='TSNE2', hue='Label', data=combined_data, palette='Set1')
-
-        plt.title('t-SNE Visualization of Labeled and Unlabeled Data')
-        plt.show()
-
-
-
